@@ -341,7 +341,13 @@ export function App() {
     setNotice('正在请求麦克风权限...');
 
     try {
-      const recorder = new MicrophoneRecorder(handleAudioChunk, setNotice, setNotice, setMicLevel);
+      const recorder = new MicrophoneRecorder(
+        handleAudioChunk,
+        setNotice,
+        setNotice,
+        setMicLevel,
+        latestConfig.audioInputDeviceId
+      );
       await recorder.start();
       recorderRef.current = recorder;
       captureSessionIdRef.current = recorder.sessionId;

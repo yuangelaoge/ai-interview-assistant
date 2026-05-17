@@ -37,6 +37,7 @@ const asrSchema = z.object({
 
 const configSchema = z.object({
   asr: asrSchema,
+  audioInputDeviceId: z.string(),
   fastModel: endpointSchema,
   deepModel: endpointSchema,
   fastAnswerMode: z.enum(['zero-context', 'context']),
