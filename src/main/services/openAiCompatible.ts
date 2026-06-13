@@ -105,6 +105,28 @@ export async function chatCompletion(
   return contentToText(choices[0]?.message?.content).trim();
 }
 
+export async function embedTexts(config: ModelEndpointConfig, inputs: string[]): Promise<number[][]> {
+  if (inputs.length === 0) {
+    return [];
+  }
+
+  const client = createClient(config);
+  const vectors: number[][] = [];
+  const batchSize = 64;
+
+  for (let index = 0; index < inputs.length; index += batchSize) {
+    const batch = inputs.slice(index, index + batchSize);
+    const response = await client.embeddings.create({
+      model: config.model,
+      input: batch
+    });
+    const ordered = [...response.data].sort((left, right) => left.index - right.index);
+    vectors.push(...ordered.map((item) => item.embedding));
+  }
+
+  return vectors;
+}
+
 export async function streamChatCompletion(
   config: ModelEndpointConfig,
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],

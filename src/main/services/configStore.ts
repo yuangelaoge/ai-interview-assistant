@@ -35,11 +35,19 @@ const asrSchema = z.object({
   })
 });
 
+const knowledgeBaseSchema = z.object({
+  enabled: z.boolean(),
+  dirPath: z.string(),
+  embedding: endpointSchema,
+  topK: z.number()
+});
+
 const configSchema = z.object({
   asr: asrSchema,
   fastModel: endpointSchema,
   deepModel: endpointSchema,
   screenshotModel: endpointSchema,
+  knowledgeBase: knowledgeBaseSchema,
   fastAnswerMode: z.enum(['zero-context', 'context']),
   deepAnswerMode: z.enum(['context', 'codebase']),
   screenshotMode: z.enum(['general', 'acm']),
@@ -134,6 +142,21 @@ export function getConfig(): AppConfig {
         model: 'AI_INTERVIEW_SCREENSHOT_MODEL_NAME'
       }
     ),
+    knowledgeBase: {
+      ...defaultConfig.knowledgeBase,
+      ...stored.knowledgeBase,
+      enabled: stored.knowledgeBase?.enabled ?? defaultConfig.knowledgeBase.enabled,
+      dirPath: stored.knowledgeBase?.dirPath ?? defaultConfig.knowledgeBase.dirPath,
+      topK: stored.knowledgeBase?.topK ?? defaultConfig.knowledgeBase.topK,
+      embedding: withEndpointEnv(
+        { ...defaultConfig.knowledgeBase.embedding, ...stored.knowledgeBase?.embedding },
+        {
+          baseURL: 'AI_INTERVIEW_EMBEDDING_BASE_URL',
+          apiKey: 'AI_INTERVIEW_EMBEDDING_API_KEY',
+          model: 'AI_INTERVIEW_EMBEDDING_MODEL'
+        }
+      )
+    },
     screenshotMode: stored.screenshotMode ?? defaultConfig.screenshotMode,
     answerLanguage: stored.answerLanguage ?? defaultConfig.answerLanguage,
     autoAnswer: stored.autoAnswer ?? defaultConfig.autoAnswer,

@@ -861,6 +861,13 @@ export function App() {
       screenshotModel: {
         ...config.screenshotModel,
         apiKey: config.screenshotModel.apiKey || currentConfig.screenshotModel.apiKey
+      },
+      knowledgeBase: {
+        ...config.knowledgeBase,
+        embedding: {
+          ...config.knowledgeBase.embedding,
+          apiKey: config.knowledgeBase.embedding.apiKey || currentConfig.knowledgeBase.embedding.apiKey
+        }
       }
     };
     const saved = await window.interviewAssistant.saveConfig(mergedConfig);

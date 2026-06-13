@@ -9,6 +9,7 @@ import { chatCompletion, transcribeWithOpenAiCompatibleApi } from './openAiCompa
 import { transcribeWithVolcengineAucFlash } from './volcengineAsr';
 import { transcribeWithVolcengineSauc } from './volcengineSaucAsr';
 import { transcribeWithMacosSpeech } from './macosSpeechAsr';
+import { retrieveKnowledge } from './knowledgeBase';
 
 export async function transcribeAudio(payload: AudioChunkPayload): Promise<AsrResult> {
   const config = getConfig();
@@ -37,6 +38,8 @@ export async function generateFastAnswer(question: string): Promise<string> {
   const shallowContext = isContextMode
     ? await loadShallowContext(config.shallowDocsPath, 10000)
     : '当前为零上下文模式：不要假设简历、JD、项目或代码细节，只基于问题本身给出稳妥的通用回答。';
+  const kbContext = await retrieveKnowledge(question, config.knowledgeBase, 6000);
+  const fullContext = kbContext ? `【知识库检索片段】\n${kbContext}\n\n${shallowContext}` : shallowContext;
   const content = await chatCompletion(
     config.fastModel,
     [
@@ -49,7 +52,7 @@ export async function generateFastAnswer(question: string): Promise<string> {
       },
       {
         role: 'user',
-        content: `快答模式：${isContextMode ? '上下文模式，最多使用约 10k 字符浅层资料' : '零上下文模式'}\n\n浅层资料：\n${shallowContext}\n\n面试官问题：\n${question}\n\n请直接生成候选人可口述的第一人称回答，不要解释应该怎么回答，也不要反问面试官。`
+        content: `快答模式：${isContextMode ? '上下文模式，最多使用约 10k 字符浅层资料' : '零上下文模式'}\n\n浅层资料：\n${fullContext}\n\n面试官问题：\n${question}\n\n请直接生成候选人可口述的第一人称回答，不要解释应该怎么回答，也不要反问面试官。`
       }
     ],
     {

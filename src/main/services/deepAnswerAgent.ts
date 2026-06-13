@@ -6,6 +6,7 @@ import { trimContext } from '../utils/text';
 import { answerLanguageDirective } from '../utils/language';
 import { getConfig } from './configStore';
 import { loadDeepContext } from './shallowContext';
+import { retrieveKnowledge } from './knowledgeBase';
 
 const IGNORE_DIRS = new Set([
   '.git',
@@ -63,7 +64,10 @@ export async function generateDeepContextAnswer(
   options: DeepAnswerOptions = {}
 ): Promise<DeepAnswerResult> {
   const context = await loadDeepContext(contextPath, 256000);
-  const lang = getConfig().answerLanguage;
+  const appConfig = getConfig();
+  const lang = appConfig.answerLanguage;
+  const kbContext = await retrieveKnowledge(question, appConfig.knowledgeBase, 20000);
+  const fullContext = kbContext ? `【知识库检索片段】\n${kbContext}\n\n${context}` : context;
   const messages = [
     {
       role: 'system' as const,
@@ -74,7 +78,7 @@ export async function generateDeepContextAnswer(
     },
     {
       role: 'user' as const,
-      content: `面试官问题：\n${question}\n\n深答长上下文资料（最多约 256k 字符）：\n${context}`
+      content: `面试官问题：\n${question}\n\n深答长上下文资料（最多约 256k 字符）：\n${fullContext}`
     }
   ];
   const answer = await streamableChatCompletion(
@@ -111,7 +115,8 @@ export async function generateDeepAnswer(
   options: DeepAnswerOptions = {}
 ): Promise<DeepAnswerResult> {
   const trace: DeepAgentTraceStep[] = [];
-  const lang = getConfig().answerLanguage;
+  const appConfig = getConfig();
+  const lang = appConfig.answerLanguage;
 
   if (!workspacePath.trim()) {
     const answer = await fallbackAnswer(config, question, '用户尚未配置代码仓库目录。', options);
@@ -173,6 +178,8 @@ export async function generateDeepAnswer(
   );
 
   const repositoryContext = trimContext(snippets.filter(Boolean).join('\n\n'), 32000);
+  const kbContext = await retrieveKnowledge(question, appConfig.knowledgeBase, 20000);
+  const fullRepositoryContext = kbContext ? `【知识库检索片段】\n${kbContext}\n\n${repositoryContext}` : repositoryContext;
   const messages = [
     {
       role: 'system' as const,
@@ -183,7 +190,7 @@ export async function generateDeepAnswer(
     },
     {
       role: 'user' as const,
-      content: `面试官问题：\n${question}\n\n代码仓库相关上下文：\n${repositoryContext}`
+      content: `面试官问题：\n${question}\n\n代码仓库相关上下文：\n${fullRepositoryContext}`
     }
   ];
   const answer = await streamableChatCompletion(

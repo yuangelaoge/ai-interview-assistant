@@ -9,7 +9,10 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPanelProps) {
-  const updateEndpoint = (key: 'asr' | 'fastModel' | 'deepModel' | 'screenshotModel', patch: Partial<ModelEndpointConfig>) => {
+  const updateEndpoint = (
+    key: 'asr' | 'fastModel' | 'deepModel' | 'screenshotModel' | 'knowledgeBaseEmbedding',
+    patch: Partial<ModelEndpointConfig>
+  ) => {
     if (key === 'asr') {
       onChange({
         ...config,
@@ -17,6 +20,20 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
           ...config.asr,
           openai: {
             ...config.asr.openai,
+            ...patch
+          }
+        }
+      });
+      return;
+    }
+
+    if (key === 'knowledgeBaseEmbedding') {
+      onChange({
+        ...config,
+        knowledgeBase: {
+          ...config.knowledgeBase,
+          embedding: {
+            ...config.knowledgeBase.embedding,
             ...patch
           }
         }
@@ -33,13 +50,24 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
     });
   };
 
-  const choosePath = async (field: 'shallowDocsPath' | 'deepContextPath' | 'codeWorkspacePath') => {
+  const choosePath = async (field: 'shallowDocsPath' | 'deepContextPath' | 'codeWorkspacePath' | 'knowledgeBaseDirPath') => {
     const selectedPath =
       field === 'shallowDocsPath' || field === 'deepContextPath'
         ? await window.interviewAssistant.selectFiles()
         : await window.interviewAssistant.selectDirectory();
 
     if (selectedPath) {
+      if (field === 'knowledgeBaseDirPath') {
+        onChange({
+          ...config,
+          knowledgeBase: {
+            ...config.knowledgeBase,
+            dirPath: selectedPath
+          }
+        });
+        return;
+      }
+
       onChange({
         ...config,
         [field]: selectedPath
@@ -212,6 +240,78 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
           endpoint={config.deepModel}
           onChange={(patch) => updateEndpoint('deepModel', patch)}
         />
+
+        <section className="endpoint-section">
+          <h3>
+            <KeyRound size={15} />
+            知识库 (RAG)
+          </h3>
+          <label className="field checkbox-field">
+            <span>启用知识库检索</span>
+            <input
+              checked={config.knowledgeBase.enabled}
+              type="checkbox"
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  knowledgeBase: {
+                    ...config.knowledgeBase,
+                    enabled: event.target.checked
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>知识库目录</span>
+            <div className="input-with-action">
+              <input
+                value={config.knowledgeBase.dirPath}
+                onChange={(event) =>
+                  onChange({
+                    ...config,
+                    knowledgeBase: {
+                      ...config.knowledgeBase,
+                      dirPath: event.target.value
+                    }
+                  })
+                }
+              />
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => choosePath('knowledgeBaseDirPath')}
+                aria-label="选择知识库目录"
+              >
+                <FolderOpen size={16} />
+              </button>
+            </div>
+          </label>
+          <EndpointFields
+            title="Embedding API"
+            endpoint={config.knowledgeBase.embedding}
+            onChange={(patch) => updateEndpoint('knowledgeBaseEmbedding', patch)}
+            embedded
+          />
+          <label className="field">
+            <span>topK</span>
+            <input
+              value={config.knowledgeBase.topK}
+              type="number"
+              min={1}
+              max={20}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  knowledgeBase: {
+                    ...config.knowledgeBase,
+                    topK: Number(event.target.value)
+                  }
+                })
+              }
+            />
+          </label>
+        </section>
 
         <section className="endpoint-section">
           <h3>

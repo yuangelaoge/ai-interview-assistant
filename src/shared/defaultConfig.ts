@@ -43,6 +43,16 @@ export const defaultConfig: AppConfig = {
     apiKey: '',
     model: 'gpt-4.1'
   },
+  knowledgeBase: {
+    enabled: false,
+    dirPath: '',
+    embedding: {
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: '',
+      model: 'text-embedding-3-small'
+    },
+    topK: 6
+  },
   fastAnswerMode: 'context',
   deepAnswerMode: 'codebase',
   screenshotMode: 'general',

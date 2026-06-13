@@ -12,6 +12,13 @@ export interface ModelEndpointConfig {
   model: string;
 }
 
+export interface KnowledgeBaseConfig {
+  enabled: boolean;
+  dirPath: string;
+  embedding: ModelEndpointConfig;
+  topK: number;
+}
+
 export type AsrProvider = 'openai-compatible' | 'volcengine-auc-flash' | 'volcengine-sauc-stream' | 'macos-speech';
 
 export interface VolcengineAsrConfig {
@@ -47,6 +54,7 @@ export interface AppConfig {
   fastModel: ModelEndpointConfig;
   deepModel: ModelEndpointConfig;
   screenshotModel: ModelEndpointConfig;
+  knowledgeBase: KnowledgeBaseConfig;
   fastAnswerMode: FastAnswerMode;
   deepAnswerMode: DeepAnswerMode;
   screenshotMode: ScreenshotMode;
