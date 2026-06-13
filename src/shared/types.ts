@@ -3,6 +3,7 @@ export type CapturePhase = 'idle' | 'collecting' | 'fastSubmitted';
 export type Speaker = 'interviewer' | 'candidate';
 export type FastAnswerMode = 'zero-context' | 'context';
 export type DeepAnswerMode = 'context' | 'codebase';
+export type ScreenshotMode = 'general' | 'acm';
 
 export interface ModelEndpointConfig {
   baseURL: string;
@@ -44,12 +45,16 @@ export interface AppConfig {
   asr: AsrConfig;
   fastModel: ModelEndpointConfig;
   deepModel: ModelEndpointConfig;
+  screenshotModel: ModelEndpointConfig;
   fastAnswerMode: FastAnswerMode;
   deepAnswerMode: DeepAnswerMode;
+  screenshotMode: ScreenshotMode;
   shallowDocsPath: string;
   deepContextPath: string;
   codeWorkspacePath: string;
   confirmHotkey: string;
+  autoAnswer: boolean;
+  screenshotHotkey: string;
 }
 
 export interface TranscriptSegment {
@@ -134,6 +139,13 @@ export interface DeepAnswerStreamChunk {
   done?: boolean;
 }
 
+export interface ScreenshotAnswerStreamChunk {
+  requestId: string;
+  delta?: string;
+  done?: boolean;
+  error?: string;
+}
+
 export interface IpcChannels {
   getConfig: () => Promise<AppConfig>;
   saveConfig: (config: AppConfig) => Promise<AppConfig>;
@@ -143,6 +155,9 @@ export interface IpcChannels {
   generateDeepAnswer: (question: string) => Promise<DeepAnswerResult>;
   generateDeepAnswerStream: (requestId: string, question: string) => Promise<void>;
   onDeepAnswerStream: (callback: (chunk: DeepAnswerStreamChunk) => void) => () => void;
+  captureAndAnswerScreenshot: (requestId: string) => Promise<void>;
+  onScreenshotAnswerStream: (callback: (chunk: ScreenshotAnswerStreamChunk) => void) => () => void;
+  onScreenshotHotkey: (callback: () => void) => () => void;
   startSystemAudio: (sessionId: string) => Promise<{ ok: boolean; message?: string }>;
   stopSystemAudio: () => Promise<void>;
   onSystemAudioTranscript: (callback: (transcript: SystemAudioTranscript) => void) => () => void;

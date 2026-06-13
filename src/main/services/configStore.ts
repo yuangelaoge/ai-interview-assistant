@@ -39,12 +39,16 @@ const configSchema = z.object({
   asr: asrSchema,
   fastModel: endpointSchema,
   deepModel: endpointSchema,
+  screenshotModel: endpointSchema,
   fastAnswerMode: z.enum(['zero-context', 'context']),
   deepAnswerMode: z.enum(['context', 'codebase']),
+  screenshotMode: z.enum(['general', 'acm']),
   shallowDocsPath: z.string(),
   deepContextPath: z.string(),
   codeWorkspacePath: z.string(),
-  confirmHotkey: z.string()
+  confirmHotkey: z.string(),
+  autoAnswer: z.boolean(),
+  screenshotHotkey: z.string()
 });
 
 const configFileName = 'interview-assistant-config.json';
@@ -120,7 +124,18 @@ export function getConfig(): AppConfig {
         apiKey: 'AI_INTERVIEW_DEEP_MODEL_API_KEY',
         model: 'AI_INTERVIEW_DEEP_MODEL_NAME'
       }
-    )
+    ),
+    screenshotModel: withEndpointEnv(
+      { ...defaultConfig.screenshotModel, ...stored.screenshotModel },
+      {
+        baseURL: 'AI_INTERVIEW_SCREENSHOT_MODEL_BASE_URL',
+        apiKey: 'AI_INTERVIEW_SCREENSHOT_MODEL_API_KEY',
+        model: 'AI_INTERVIEW_SCREENSHOT_MODEL_NAME'
+      }
+    ),
+    screenshotMode: stored.screenshotMode ?? defaultConfig.screenshotMode,
+    autoAnswer: stored.autoAnswer ?? defaultConfig.autoAnswer,
+    screenshotHotkey: stored.screenshotHotkey || defaultConfig.screenshotHotkey
   };
 
   return configSchema.parse(current);

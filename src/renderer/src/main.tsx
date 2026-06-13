@@ -27,6 +27,11 @@ if (!window.interviewAssistant) {
       throw new Error('未连接 Electron 主进程，无法生成流式深答。');
     },
     onDeepAnswerStream: () => () => undefined,
+    captureAndAnswerScreenshot: async () => {
+      throw new Error('未连接 Electron 主进程，无法截图答题。');
+    },
+    onScreenshotAnswerStream: () => () => undefined,
+    onScreenshotHotkey: () => () => undefined,
     startSystemAudio: async () => {
       throw new Error('未连接 Electron 主进程，无法采集系统音频。');
     },

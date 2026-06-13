@@ -38,10 +38,18 @@ export const defaultConfig: AppConfig = {
     apiKey: '',
     model: 'gpt-4.1'
   },
+  screenshotModel: {
+    baseURL: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'gpt-4.1'
+  },
   fastAnswerMode: 'context',
   deepAnswerMode: 'codebase',
+  screenshotMode: 'general',
   shallowDocsPath: '',
   deepContextPath: '',
   codeWorkspacePath: '',
-  confirmHotkey: 'CommandOrControl+Shift+Enter'
+  confirmHotkey: 'CommandOrControl+Shift+Enter',
+  autoAnswer: false,
+  screenshotHotkey: 'CommandOrControl+Shift+S'
 };

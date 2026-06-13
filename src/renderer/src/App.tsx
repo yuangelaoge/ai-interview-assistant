@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bot,
   Braces,
+  Camera,
   Check,
   ClipboardList,
   Code2,
@@ -12,9 +13,11 @@ import {
   Radio,
   Send,
   Settings,
-  Sparkles
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import type { AnswerResult, AppConfig, RuntimeState, TranscriptSegment } from '../../shared/types';
+import type { ServiceStatus } from '../../shared/types';
 import { defaultConfig } from '../../shared/defaultConfig';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StatusPill } from './components/StatusPill';
@@ -33,12 +36,18 @@ const initialState: RuntimeState = {
   }
 };
 
+const FAST_SILENCE_MS = 1600;
+const DEEP_SILENCE_MS = 3500;
+
 export function App() {
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [state, setState] = useState<RuntimeState>(initialState);
   const [showSettings, setShowSettings] = useState(false);
   const [notice, setNotice] = useState('准备就绪。点击开始收题：系统音频作为面试官问题入口，麦克风转写候选人回答。');
   const [deepTrace, setDeepTrace] = useState<string[]>([]);
+  const [screenshotAnswer, setScreenshotAnswer] = useState('');
+  const [screenshotStatus, setScreenshotStatus] = useState<ServiceStatus>('idle');
+  const [screenshotError, setScreenshotError] = useState<string | undefined>();
   const [micLevel, setMicLevel] = useState(0);
   const recorderRef = useRef<MicrophoneRecorder | undefined>(undefined);
   const activeQuestionRef = useRef('');
@@ -49,6 +58,20 @@ export function App() {
   const stateRef = useRef(initialState);
   const fastRequestRef = useRef('');
   const deepRequestRef = useRef('');
+  const screenshotRequestRef = useRef('');
+  const silenceTimerRef = useRef<number | undefined>(undefined);
+  const autoAnswerRef = useRef(false);
+  const lastSystemTranscriptAtRef = useRef(0);
+  const scheduleSilenceTriggerRef = useRef<(() => void) | undefined>(undefined);
+
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current === undefined) {
+      return;
+    }
+
+    window.clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = undefined;
+  }, []);
 
   useEffect(() => {
     window.interviewAssistant
@@ -68,6 +91,13 @@ export function App() {
         }));
       });
   }, []);
+
+  useEffect(() => {
+    autoAnswerRef.current = config.autoAnswer;
+    if (!config.autoAnswer) {
+      clearSilenceTimer();
+    }
+  }, [clearSilenceTimer, config.autoAnswer]);
 
   useEffect(() => {
     activeQuestionRef.current = state.activeQuestion;
@@ -121,8 +151,10 @@ export function App() {
   }
 
   const resetQuestionCapture = useCallback(() => {
+    clearSilenceTimer();
     void window.interviewAssistant.stopSystemAudio();
     activeQuestionRef.current = '';
+    lastSystemTranscriptAtRef.current = 0;
     captureSessionIdRef.current = '';
     micSessionIdRef.current = '';
     fastRequestRef.current = '';
@@ -144,7 +176,7 @@ export function App() {
         deepAgent: 'idle'
       }
     }));
-  }, []);
+  }, [clearSilenceTimer]);
 
   const startListening = useCallback(async () => {
     if (stateRef.current.isListening) {
@@ -206,6 +238,7 @@ export function App() {
 
     captureSessionIdRef.current = sessionId;
     activeQuestionRef.current = '';
+    lastSystemTranscriptAtRef.current = 0;
     fastRequestRef.current = '';
     deepRequestRef.current = '';
     setState((current) => ({
@@ -241,6 +274,7 @@ export function App() {
   }, [config, handleMicChunk]);
 
   const stopListening = useCallback(() => {
+    clearSilenceTimer();
     void window.interviewAssistant.stopSystemAudio();
     recorderRef.current?.stop();
     recorderRef.current = undefined;
@@ -257,7 +291,7 @@ export function App() {
       }
     }));
     setNotice('已停止监听。');
-  }, []);
+  }, [clearSilenceTimer]);
 
   const runDeepAnswer = useCallback((question: string, answerId?: string) => {
     const targetAnswerId = answerId ?? `deep-${Date.now()}`;
@@ -325,6 +359,31 @@ export function App() {
     });
   }, [config.deepAnswerMode]);
 
+  const captureScreenshotAnswer = useCallback(() => {
+    if (screenshotRequestRef.current || screenshotStatus === 'thinking') {
+      return;
+    }
+
+    const requestId = `screenshot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    screenshotRequestRef.current = requestId;
+    setScreenshotAnswer('');
+    setScreenshotError(undefined);
+    setScreenshotStatus('thinking');
+    setNotice('正在截取屏幕并提交视觉模型...');
+
+    void window.interviewAssistant.captureAndAnswerScreenshot(requestId).catch((error) => {
+      if (screenshotRequestRef.current !== requestId) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : '截图答题启动失败。';
+      screenshotRequestRef.current = '';
+      setScreenshotStatus('error');
+      setScreenshotError(message);
+      setNotice(message);
+    });
+  }, [screenshotStatus]);
+
   const generateFastOnly = useCallback(async () => {
     if (fastRequestRef.current || stateRef.current.statuses.fastModel === 'thinking') {
       return;
@@ -338,6 +397,7 @@ export function App() {
 
     const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     fastRequestRef.current = requestId;
+    clearSilenceTimer();
     const answerId = `answer-${Date.now()}`;
     const createdAt = Date.now();
 
@@ -359,8 +419,13 @@ export function App() {
         updatedAt: createdAt
       }
     }));
+    stateRef.current = {
+      ...stateRef.current,
+      capturePhase: 'fastSubmitted'
+    };
     setDeepTrace(['第一次停止已触发，系统音频继续收完整问题后第二次停止生成深答。']);
     setNotice('第一次停止：正在生成快答，系统音频继续收完整问题。');
+    scheduleSilenceTriggerRef.current?.();
 
     try {
       const fastAnswer = await window.interviewAssistant.generateFastAnswer(question);
@@ -422,13 +487,14 @@ export function App() {
       }
       setNotice(message);
     }
-  }, []);
+  }, [clearSilenceTimer]);
 
   const generateDeepFromFullQuestion = useCallback(async () => {
     if (stateRef.current.statuses.deepAgent === 'thinking') {
       return;
     }
 
+    clearSilenceTimer();
     setNotice('第二次停止：正在停止系统音频并补齐最后一段...');
     setState((current) => ({
       ...current,
@@ -485,7 +551,50 @@ export function App() {
     }));
     setNotice('第二次停止：完整问题已提交深答。');
     void runDeepAnswer(question, stateRef.current.currentAnswer?.id);
-  }, [runDeepAnswer]);
+  }, [clearSilenceTimer, runDeepAnswer]);
+
+  // 自动答题只观察系统音频转写静默，不介入 ASR 和问题拼接逻辑。
+  const scheduleSilenceTrigger = useCallback(() => {
+    clearSilenceTimer();
+
+    if (!autoAnswerRef.current) {
+      return;
+    }
+
+    const phase = stateRef.current.capturePhase;
+    const lastTranscriptAt = lastSystemTranscriptAtRef.current || Date.now();
+
+    if (phase === 'collecting') {
+      const delay = Math.max(0, FAST_SILENCE_MS - (Date.now() - lastTranscriptAt));
+      silenceTimerRef.current = window.setTimeout(() => {
+        silenceTimerRef.current = undefined;
+        if (autoAnswerRef.current && stateRef.current.capturePhase === 'collecting' && activeQuestionRef.current.trim()) {
+          void generateFastOnly();
+        }
+      }, delay);
+      return;
+    }
+
+    if (phase === 'fastSubmitted') {
+      const delay = Math.max(0, DEEP_SILENCE_MS - (Date.now() - lastTranscriptAt));
+      silenceTimerRef.current = window.setTimeout(() => {
+        silenceTimerRef.current = undefined;
+        if (autoAnswerRef.current && stateRef.current.capturePhase === 'fastSubmitted') {
+          void generateDeepFromFullQuestion();
+        }
+      }, delay);
+    }
+  }, [clearSilenceTimer, generateDeepFromFullQuestion, generateFastOnly]);
+
+  useEffect(() => {
+    scheduleSilenceTriggerRef.current = scheduleSilenceTrigger;
+  }, [scheduleSilenceTrigger]);
+
+  useEffect(() => {
+    return () => {
+      clearSilenceTimer();
+    };
+  }, [clearSilenceTimer]);
 
   const handleCaptureButton = useCallback(() => {
     const latest = stateRef.current;
@@ -519,6 +628,12 @@ export function App() {
     });
   }, [confirmQuestion]);
 
+  useEffect(() => {
+    return window.interviewAssistant.onScreenshotHotkey(() => {
+      captureScreenshotAnswer();
+    });
+  }, [captureScreenshotAnswer]);
+
   // 系统音频转写（面试官）：merge 进 activeQuestion 驱动收题状态机，并作为 interviewer 条目显示。
   useEffect(() => {
     return window.interviewAssistant.onSystemAudioTranscript((transcript) => {
@@ -536,6 +651,7 @@ export function App() {
 
       const merged = mergeQuestionText(activeQuestionRef.current, text);
       activeQuestionRef.current = merged;
+      lastSystemTranscriptAtRef.current = Date.now();
 
       const segment: TranscriptSegment = {
         id: `sys-${transcript.sessionId}-${transcript.sequence}`,
@@ -562,6 +678,7 @@ export function App() {
           }
         };
       });
+      scheduleSilenceTriggerRef.current?.();
     });
   }, []);
 
@@ -648,6 +765,35 @@ export function App() {
     });
   }, []);
 
+  useEffect(() => {
+    return window.interviewAssistant.onScreenshotAnswerStream((chunk) => {
+      if (chunk.requestId !== screenshotRequestRef.current) {
+        return;
+      }
+
+      if (chunk.delta) {
+        setScreenshotAnswer((current) => `${current}${chunk.delta}`);
+        setScreenshotStatus('thinking');
+      }
+
+      if (!chunk.done) {
+        return;
+      }
+
+      screenshotRequestRef.current = '';
+
+      if (chunk.error) {
+        setScreenshotStatus('error');
+        setScreenshotError(chunk.error);
+        setNotice(chunk.error);
+        return;
+      }
+
+      setScreenshotStatus('ready');
+      setNotice('截图答题已完成。');
+    });
+  }, []);
+
   const saveSettings = async () => {
     const currentConfig = await window.interviewAssistant.getConfig().catch(() => config);
     const mergedConfig: AppConfig = {
@@ -681,12 +827,16 @@ export function App() {
       deepModel: {
         ...config.deepModel,
         apiKey: config.deepModel.apiKey || currentConfig.deepModel.apiKey
+      },
+      screenshotModel: {
+        ...config.screenshotModel,
+        apiKey: config.screenshotModel.apiKey || currentConfig.screenshotModel.apiKey
       }
     };
     const saved = await window.interviewAssistant.saveConfig(mergedConfig);
     setConfig(saved);
     setShowSettings(false);
-    setNotice(`设置已保存，确认热键：${saved.confirmHotkey}`);
+    setNotice(`设置已保存，确认热键：${saved.confirmHotkey}；笔试截图：${saved.screenshotHotkey}`);
   };
 
   const captureButtonLabel =
@@ -699,6 +849,18 @@ export function App() {
         : '停止系统音频并提交完整问题给深答';
   const captureButtonIcon = !state.isListening ? <Mic size={16} /> : state.capturePhase === 'collecting' ? <Flag size={16} /> : <MicOff size={16} />;
   const captureButtonClass = !state.isListening ? 'primary-button' : state.capturePhase === 'collecting' ? 'primary-button' : 'danger-button';
+  const toggleAutoAnswer = () => {
+    const next = { ...config, autoAnswer: !config.autoAnswer };
+    setConfig(next);
+    autoAnswerRef.current = next.autoAnswer;
+    if (!next.autoAnswer) {
+      clearSilenceTimer();
+    } else {
+      scheduleSilenceTriggerRef.current?.();
+    }
+    void window.interviewAssistant.saveConfig(next);
+    setNotice(next.autoAnswer ? '自动答题已开启：停顿后自动触发快答和深答。' : '自动答题已关闭。');
+  };
 
   return (
     <main className="app-shell">
@@ -723,6 +885,25 @@ export function App() {
             >
               {captureButtonIcon}
               {captureButtonLabel}
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={captureScreenshotAnswer}
+              disabled={screenshotStatus === 'thinking'}
+              title={`截取当前屏幕并解题，热键 ${config.screenshotHotkey}`}
+            >
+              <Camera size={16} />
+              笔试截图
+            </button>
+            <button
+              className={['icon-button', 'auto-answer-toggle', config.autoAnswer ? 'active' : ''].filter(Boolean).join(' ')}
+              type="button"
+              onClick={toggleAutoAnswer}
+              title="自动答题（语音触发）"
+            >
+              <Zap size={18} />
+              <span>自动:{config.autoAnswer ? '开' : '关'}</span>
             </button>
             <button className="icon-button" type="button" onClick={() => setShowSettings(true)} aria-label="打开设置">
               <Settings size={18} />
@@ -858,6 +1039,31 @@ export function App() {
                   <p className="placeholder">
                     快答返回后，深答会继续读取{config.deepAnswerMode === 'codebase' ? '仓库上下文' : '长上下文资料'}并追加完整回答。
                   </p>
+                )}
+              </div>
+            </article>
+
+            <article className="panel screenshot-panel">
+              <header className="panel-header">
+                <div>
+                  <h2>
+                    <Camera size={17} />
+                    笔试截图
+                  </h2>
+                  <p>{config.screenshotMode === 'acm' ? 'ACM 算法题，输出可提交代码' : '通用题目识别与解答'}</p>
+                </div>
+                <StatusPill label="截图" status={screenshotStatus} />
+              </header>
+
+              <div className="answer-content screenshot-answer">
+                {screenshotError ? (
+                  <p className="error-text">{screenshotError}</p>
+                ) : screenshotAnswer ? (
+                  <pre>{screenshotAnswer}</pre>
+                ) : screenshotStatus === 'thinking' ? (
+                  <p className="placeholder">正在识别截图并解题...</p>
+                ) : (
+                  <p className="placeholder">点击「笔试截图」或按热键，对当前屏幕题目作答</p>
                 )}
               </div>
             </article>

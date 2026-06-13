@@ -3,6 +3,7 @@ import type {
   AppConfig,
   AudioChunkPayload,
   DeepAnswerStreamChunk,
+  ScreenshotAnswerStreamChunk,
   SystemAudioStatus,
   SystemAudioTranscript
 } from '../shared/types';
@@ -19,6 +20,17 @@ contextBridge.exposeInMainWorld('interviewAssistant', {
     const listener = (_event: Electron.IpcRendererEvent, chunk: DeepAnswerStreamChunk) => callback(chunk);
     ipcRenderer.on('answer:deep-stream-chunk', listener);
     return () => ipcRenderer.removeListener('answer:deep-stream-chunk', listener);
+  },
+  captureAndAnswerScreenshot: (requestId: string) => ipcRenderer.invoke('screenshot:answer-stream', requestId),
+  onScreenshotAnswerStream: (callback: (chunk: ScreenshotAnswerStreamChunk) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, chunk: ScreenshotAnswerStreamChunk) => callback(chunk);
+    ipcRenderer.on('screenshot:answer-chunk', listener);
+    return () => ipcRenderer.removeListener('screenshot:answer-chunk', listener);
+  },
+  onScreenshotHotkey: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('screenshot:hotkey', listener);
+    return () => ipcRenderer.removeListener('screenshot:hotkey', listener);
   },
   startSystemAudio: (sessionId: string) => ipcRenderer.invoke('system-audio:start', sessionId),
   stopSystemAudio: () => ipcRenderer.invoke('system-audio:stop'),

@@ -8,10 +8,12 @@ import {
   generateFastAnswer,
   transcribeAudio
 } from './services/answerService';
+import { generateScreenshotAnswer } from './services/screenshotAnswer';
 import { startSystemAudioCapture, stopSystemAudioCapture } from './services/systemAudioCapture';
 
 let mainWindow: BrowserWindow | undefined;
 let currentHotkey = '';
+let currentScreenshotHotkey = '';
 
 app.setName('ai-interview-assistant');
 
@@ -64,6 +66,7 @@ function registerIpc(): void {
   ipcMain.handle('config:save', (_event, config: AppConfig) => {
     const saved = saveConfig(config);
     registerConfirmHotkey(saved.confirmHotkey);
+    registerScreenshotHotkey(saved.screenshotHotkey);
     return saved;
   });
 
@@ -95,6 +98,30 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle('answer:confirm-question', (_event, question: string) => confirmQuestion(question));
+
+  ipcMain.handle('screenshot:answer-stream', async (event, requestId: string) => {
+    try {
+      await generateScreenshotAnswer({
+        onDelta: (delta) => {
+          event.sender.send('screenshot:answer-chunk', {
+            requestId,
+            delta
+          });
+        }
+      });
+
+      event.sender.send('screenshot:answer-chunk', {
+        requestId,
+        done: true
+      });
+    } catch (error) {
+      event.sender.send('screenshot:answer-chunk', {
+        requestId,
+        error: error instanceof Error ? error.message : '截图答题生成失败。',
+        done: true
+      });
+    }
+  });
 
   ipcMain.handle('system-audio:start', async (event, sessionId: string) => {
     try {
@@ -161,6 +188,27 @@ function registerConfirmHotkey(accelerator: string): boolean {
   return ok;
 }
 
+function registerScreenshotHotkey(accelerator: string): boolean {
+  if (currentScreenshotHotkey) {
+    globalShortcut.unregister(currentScreenshotHotkey);
+    currentScreenshotHotkey = '';
+  }
+
+  if (!accelerator.trim()) {
+    return false;
+  }
+
+  const ok = globalShortcut.register(accelerator, () => {
+    mainWindow?.webContents.send('screenshot:hotkey');
+  });
+
+  if (ok) {
+    currentScreenshotHotkey = accelerator;
+  }
+
+  return ok;
+}
+
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(['media', 'microphone'].includes(String(permission)));
@@ -172,7 +220,9 @@ app.whenReady().then(() => {
 
   registerIpc();
   createWindow();
-  registerConfirmHotkey(getConfig().confirmHotkey);
+  const config = getConfig();
+  registerConfirmHotkey(config.confirmHotkey);
+  registerScreenshotHotkey(config.screenshotHotkey);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

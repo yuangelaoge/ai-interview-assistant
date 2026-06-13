@@ -9,7 +9,7 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPanelProps) {
-  const updateEndpoint = (key: 'asr' | 'fastModel' | 'deepModel', patch: Partial<ModelEndpointConfig>) => {
+  const updateEndpoint = (key: 'asr' | 'fastModel' | 'deepModel' | 'screenshotModel', patch: Partial<ModelEndpointConfig>) => {
     if (key === 'asr') {
       onChange({
         ...config,
@@ -238,10 +238,53 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
           )}
         </section>
 
+        <EndpointFields
+          title="笔试截图 / 视觉模型"
+          endpoint={config.screenshotModel}
+          onChange={(patch) => updateEndpoint('screenshotModel', patch)}
+        />
+
+        <section className="endpoint-section">
+          <h3>
+            <KeyRound size={15} />
+            笔试截图模式
+          </h3>
+          <label className="field">
+            <span>模式</span>
+            <select
+              value={config.screenshotMode}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  screenshotMode: event.target.value as AppConfig['screenshotMode']
+                })
+              }
+            >
+              <option value="general">通用解题</option>
+              <option value="acm">ACM 算法</option>
+            </select>
+          </label>
+
+          <label className="field">
+            <span>笔试截图热键</span>
+            <input value={config.screenshotHotkey} onChange={(event) => onChange({ ...config, screenshotHotkey: event.target.value })} />
+          </label>
+        </section>
+
         <label className="field">
           <span>确认热键</span>
           <input value={config.confirmHotkey} onChange={(event) => onChange({ ...config, confirmHotkey: event.target.value })} />
         </label>
+
+        <label className="field checkbox-field">
+          <span>自动答题（语音触发）</span>
+          <input
+            checked={config.autoAnswer}
+            type="checkbox"
+            onChange={(event) => onChange({ ...config, autoAnswer: event.target.checked })}
+          />
+        </label>
+        <p className="field-help">开启后，面试官停顿约 1.6 秒自动出快答，约 3.5 秒自动出深答。</p>
       </div>
 
       <footer className="settings-footer">
