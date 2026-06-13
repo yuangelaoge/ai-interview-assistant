@@ -7,6 +7,7 @@ import { loadShallowContext } from './shallowContext';
 import { chatCompletion, transcribeWithOpenAiCompatibleApi } from './openAiCompatible';
 import { transcribeWithVolcengineAucFlash } from './volcengineAsr';
 import { transcribeWithVolcengineSauc } from './volcengineSaucAsr';
+import { transcribeWithMacosSpeech } from './macosSpeechAsr';
 
 export async function transcribeAudio(payload: AudioChunkPayload): Promise<AsrResult> {
   const config = getConfig();
@@ -16,6 +17,8 @@ export async function transcribeAudio(payload: AudioChunkPayload): Promise<AsrRe
     text = await transcribeWithVolcengineSauc(config.asr.volcengineSauc, payload);
   } else if (config.asr.provider === 'volcengine-auc-flash') {
     text = await transcribeWithVolcengineAucFlash(config.asr.volcengine, payload);
+  } else if (config.asr.provider === 'macos-speech') {
+    text = await transcribeWithMacosSpeech(payload);
   } else {
     text = await transcribeWithOpenAiCompatibleApi(config.asr.openai, payload);
   }

@@ -341,7 +341,8 @@ export function App() {
     setNotice('正在请求麦克风权限...');
 
     try {
-      const recorder = new MicrophoneRecorder(handleAudioChunk, setNotice, setNotice, setMicLevel);
+      const flushIntervalMs = latestConfig.asr.provider === 'macos-speech' ? 3000 : 1000;
+      const recorder = new MicrophoneRecorder(handleAudioChunk, setNotice, setNotice, setMicLevel, flushIntervalMs);
       await recorder.start();
       recorderRef.current = recorder;
       captureSessionIdRef.current = recorder.sessionId;
@@ -983,6 +984,10 @@ export function App() {
 }
 
 function validateAsrConfig(config: AppConfig): string | undefined {
+  if (config.asr.provider === 'macos-speech') {
+    return undefined;
+  }
+
   if (config.asr.provider === 'volcengine-sauc-stream') {
     const volcengineSauc = config.asr.volcengineSauc;
     if (!volcengineSauc.endpoint.trim()) {

@@ -19,7 +19,7 @@
   - 代码仓库模式：只读扫描代码仓库，读取相关文件片段后生成回答。
 - 快答模型、深答模型、语音识别 API 三套配置互相独立。
 - 模型接口默认按 OpenAI 兼容协议设计。
-- 支持火山引擎 LAS ASR 和实验性的火山流式 ASR。
+- 支持 OpenAI 兼容 Whisper、macOS 系统语音识别、火山引擎 LAS ASR 和实验性的火山流式 ASR。
 - 深答支持流式输出，生成过程中会持续追加到界面。
 
 ## 技术栈
@@ -86,6 +86,22 @@ AI_INTERVIEW_ASR_OPENAI_BASE_URL=https://api.openai.com/v1
 AI_INTERVIEW_ASR_OPENAI_API_KEY=
 AI_INTERVIEW_ASR_OPENAI_MODEL=whisper-1
 ```
+
+### macOS 系统语音识别
+
+选择 `macOS 系统语音识别` provider 时无需 API Key。应用会把当前麦克风 WAV 片段交给随应用构建的 Swift helper，并通过 Apple Speech framework 识别。
+
+```bash
+AI_INTERVIEW_MACOS_SPEECH_LOCALE=zh-CN
+AI_INTERVIEW_MACOS_SPEECH_ON_DEVICE=0
+AI_INTERVIEW_MACOS_SPEECH_TIMEOUT=12
+```
+
+说明：
+
+- 首次使用会触发 macOS 语音识别权限。
+- `AI_INTERVIEW_MACOS_SPEECH_ON_DEVICE=1` 会要求尽量使用本机识别，但实际支持取决于 macOS 版本、语言和系统资源。
+- 该 provider 仅支持 macOS；Windows 版本请继续使用 OpenAI 兼容 Whisper 或火山 ASR。
 
 ### 火山引擎 LAS ASR
 
@@ -166,4 +182,3 @@ rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!release/**' 
 ## 许可证
 
 请根据你的开源计划补充 License 文件，例如 MIT、Apache-2.0 或其他协议。
-

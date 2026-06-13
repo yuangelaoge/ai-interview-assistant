@@ -81,6 +81,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             >
               <option value="volcengine-sauc-stream">火山流式语音识别</option>
               <option value="volcengine-auc-flash">LAS 豆包语音 ASR</option>
+              <option value="macos-speech">macOS 系统语音识别</option>
               <option value="openai-compatible">OpenAI 兼容 Whisper</option>
             </select>
           </label>
@@ -117,6 +118,8 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
                 })
               }
             />
+          ) : config.asr.provider === 'macos-speech' ? (
+            <MacosSpeechFields />
           ) : (
             <EndpointFields
               title="OpenAI 兼容 ASR"
@@ -248,6 +251,15 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
         </button>
       </footer>
     </aside>
+  );
+}
+
+function MacosSpeechFields() {
+  return (
+    <p className="field-help">
+      使用 macOS Speech framework 调用系统语音识别，不需要 API Key。首次使用会触发系统语音识别权限；可通过
+      AI_INTERVIEW_MACOS_SPEECH_LOCALE 和 AI_INTERVIEW_MACOS_SPEECH_ON_DEVICE 调整语言和本机识别偏好。
+    </p>
   );
 }
 

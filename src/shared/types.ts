@@ -9,7 +9,7 @@ export interface ModelEndpointConfig {
   model: string;
 }
 
-export type AsrProvider = 'openai-compatible' | 'volcengine-auc-flash' | 'volcengine-sauc-stream';
+export type AsrProvider = 'openai-compatible' | 'volcengine-auc-flash' | 'volcengine-sauc-stream' | 'macos-speech';
 
 export interface VolcengineAsrConfig {
   endpoint: string;

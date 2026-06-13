@@ -2,7 +2,7 @@ import type { AppConfig } from './types';
 
 export const defaultConfig: AppConfig = {
   asr: {
-    provider: 'volcengine-auc-flash',
+    provider: 'openai-compatible',
     openai: {
       baseURL: 'https://api.openai.com/v1',
       apiKey: '',

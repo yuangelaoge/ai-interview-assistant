@@ -12,7 +12,7 @@ const endpointSchema = z.object({
 });
 
 const asrSchema = z.object({
-  provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream']),
+  provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream', 'macos-speech']),
   openai: endpointSchema,
   volcengine: z.object({
     endpoint: z.string(),
