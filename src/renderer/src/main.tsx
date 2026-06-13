@@ -27,6 +27,12 @@ if (!window.interviewAssistant) {
       throw new Error('未连接 Electron 主进程，无法生成流式深答。');
     },
     onDeepAnswerStream: () => () => undefined,
+    startSystemAudio: async () => {
+      throw new Error('未连接 Electron 主进程，无法采集系统音频。');
+    },
+    stopSystemAudio: async () => undefined,
+    onSystemAudioTranscript: () => () => undefined,
+    onSystemAudioStatus: () => () => undefined,
     selectDirectory: async () => undefined,
     selectFiles: async () => undefined,
     registerHotkey: async () => false,

@@ -8,6 +8,7 @@ import {
   generateFastAnswer,
   transcribeAudio
 } from './services/answerService';
+import { startSystemAudioCapture, stopSystemAudioCapture } from './services/systemAudioCapture';
 
 let mainWindow: BrowserWindow | undefined;
 let currentHotkey = '';
@@ -95,6 +96,23 @@ function registerIpc(): void {
   });
   ipcMain.handle('answer:confirm-question', (_event, question: string) => confirmQuestion(question));
 
+  ipcMain.handle('system-audio:start', async (event, sessionId: string) => {
+    try {
+      await startSystemAudioCapture(sessionId, {
+        onTranscript: (transcript) => event.sender.send('system-audio:transcript', transcript),
+        onStatus: (status) => event.sender.send('system-audio:status', status)
+      });
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : '系统音频采集启动失败。'
+      };
+    }
+  });
+
+  ipcMain.handle('system-audio:stop', () => stopSystemAudioCapture());
+
   ipcMain.handle('dialog:select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: '选择目录',
@@ -171,4 +189,5 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  void stopSystemAudioCapture();
 });

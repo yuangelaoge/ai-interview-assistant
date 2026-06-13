@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppConfig, AudioChunkPayload, DeepAnswerStreamChunk } from '../shared/types';
+import type {
+  AppConfig,
+  AudioChunkPayload,
+  DeepAnswerStreamChunk,
+  SystemAudioStatus,
+  SystemAudioTranscript
+} from '../shared/types';
 
 contextBridge.exposeInMainWorld('interviewAssistant', {
   getConfig: () => ipcRenderer.invoke('config:get'),
@@ -13,6 +19,18 @@ contextBridge.exposeInMainWorld('interviewAssistant', {
     const listener = (_event: Electron.IpcRendererEvent, chunk: DeepAnswerStreamChunk) => callback(chunk);
     ipcRenderer.on('answer:deep-stream-chunk', listener);
     return () => ipcRenderer.removeListener('answer:deep-stream-chunk', listener);
+  },
+  startSystemAudio: (sessionId: string) => ipcRenderer.invoke('system-audio:start', sessionId),
+  stopSystemAudio: () => ipcRenderer.invoke('system-audio:stop'),
+  onSystemAudioTranscript: (callback: (transcript: SystemAudioTranscript) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, transcript: SystemAudioTranscript) => callback(transcript);
+    ipcRenderer.on('system-audio:transcript', listener);
+    return () => ipcRenderer.removeListener('system-audio:transcript', listener);
+  },
+  onSystemAudioStatus: (callback: (status: SystemAudioStatus) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: SystemAudioStatus) => callback(status);
+    ipcRenderer.on('system-audio:status', listener);
+    return () => ipcRenderer.removeListener('system-audio:status', listener);
   },
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory'),
   selectFiles: () => ipcRenderer.invoke('dialog:select-files'),

@@ -1,5 +1,6 @@
 export type ServiceStatus = 'idle' | 'listening' | 'thinking' | 'ready' | 'error';
 export type CapturePhase = 'idle' | 'collecting' | 'fastSubmitted';
+export type Speaker = 'interviewer' | 'candidate';
 export type FastAnswerMode = 'zero-context' | 'context';
 export type DeepAnswerMode = 'context' | 'codebase';
 
@@ -58,6 +59,7 @@ export interface TranscriptSegment {
   confidence: number;
   isCandidateQuestion: boolean;
   sequence?: number;
+  speaker?: Speaker;
 }
 
 export interface AsrResult {
@@ -96,6 +98,21 @@ export interface AudioChunkPayload {
   data: ArrayBuffer;
   sequence?: number;
   captureSessionId?: string;
+  speaker?: Speaker;
+}
+
+export interface SystemAudioTranscript {
+  sessionId: string;
+  sequence: number;
+  text: string;
+  timestamp: number;
+  confidence: number;
+}
+
+export interface SystemAudioStatus {
+  sessionId: string;
+  status: ServiceStatus;
+  message?: string;
 }
 
 export interface DeepAgentTraceStep {
@@ -126,6 +143,10 @@ export interface IpcChannels {
   generateDeepAnswer: (question: string) => Promise<DeepAnswerResult>;
   generateDeepAnswerStream: (requestId: string, question: string) => Promise<void>;
   onDeepAnswerStream: (callback: (chunk: DeepAnswerStreamChunk) => void) => () => void;
+  startSystemAudio: (sessionId: string) => Promise<{ ok: boolean; message?: string }>;
+  stopSystemAudio: () => Promise<void>;
+  onSystemAudioTranscript: (callback: (transcript: SystemAudioTranscript) => void) => () => void;
+  onSystemAudioStatus: (callback: (status: SystemAudioStatus) => void) => () => void;
   selectDirectory: () => Promise<string | undefined>;
   selectFiles: () => Promise<string | undefined>;
   registerHotkey: (accelerator: string) => Promise<boolean>;

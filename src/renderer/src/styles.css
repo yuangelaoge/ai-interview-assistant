@@ -356,15 +356,52 @@ button {
   border-bottom: 1px solid rgba(174, 205, 211, 0.1);
 }
 
-.transcript-item.hot {
+.transcript-item.interviewer {
   padding: 10px;
-  border: 1px solid rgba(100, 220, 203, 0.24);
+  border-left: 2px solid rgba(120, 170, 255, 0.5);
   border-radius: 8px;
-  background: rgba(100, 220, 203, 0.07);
+  background: rgba(120, 170, 255, 0.07);
+}
+
+.transcript-item.candidate {
+  padding: 10px;
+  border-left: 2px solid rgba(100, 220, 203, 0.45);
+  border-radius: 8px;
+  background: rgba(100, 220, 203, 0.06);
+}
+
+.transcript-item.interviewer.hot {
+  border: 1px solid rgba(120, 170, 255, 0.45);
+  border-left: 2px solid rgba(120, 170, 255, 0.7);
+  background: rgba(120, 170, 255, 0.12);
 }
 
 .transcript-item + .transcript-item {
   margin-top: 8px;
+}
+
+.transcript-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speaker-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.transcript-item.interviewer .speaker-tag {
+  color: #a9c6ff;
+  background: rgba(120, 170, 255, 0.16);
+}
+
+.transcript-item.candidate .speaker-tag {
+  color: #7fe6d4;
+  background: rgba(100, 220, 203, 0.16);
 }
 
 .transcript-item time,
