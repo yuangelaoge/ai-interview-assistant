@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('interviewAssistant', {
   transcribeAudio: (payload: AudioChunkPayload) => ipcRenderer.invoke('audio:transcribe', payload),
   confirmQuestion: (question: string) => ipcRenderer.invoke('answer:confirm-question', question),
   generateFastAnswer: (question: string) => ipcRenderer.invoke('answer:fast', question),
+  translateQuestion: (text: string) => ipcRenderer.invoke('answer:translate', text),
   generateDeepAnswer: (question: string) => ipcRenderer.invoke('answer:deep', question),
   generateDeepAnswerStream: (requestId: string, question: string) => ipcRenderer.invoke('answer:deep-stream', requestId, question),
   onDeepAnswerStream: (callback: (chunk: DeepAnswerStreamChunk) => void) => {

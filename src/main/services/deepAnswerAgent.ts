@@ -3,6 +3,8 @@ import path from 'node:path';
 import type { DeepAgentTraceStep, DeepAnswerResult, ModelEndpointConfig } from '../../shared/types';
 import { chatCompletion, streamChatCompletion } from './openAiCompatible';
 import { trimContext } from '../utils/text';
+import { answerLanguageDirective } from '../utils/language';
+import { getConfig } from './configStore';
 import { loadDeepContext } from './shallowContext';
 
 const IGNORE_DIRS = new Set([
@@ -61,11 +63,14 @@ export async function generateDeepContextAnswer(
   options: DeepAnswerOptions = {}
 ): Promise<DeepAnswerResult> {
   const context = await loadDeepContext(contextPath, 256000);
+  const lang = getConfig().answerLanguage;
   const messages = [
     {
       role: 'system' as const,
       content:
-        '你是资深技术面试陪练助手。当前使用深答上下文模式，不读取代码仓库，只基于用户提供的长上下文资料和面试官问题生成完整回答。输出中文，结构清晰，包含回答主线、关键技术细节、项目案例表达、可追问延展。不要编造上下文里没有的具体事实；资料不足时给出保守但可口述的表达。'
+        '你是资深技术面试陪练助手。当前使用深答上下文模式，不读取代码仓库，只基于用户提供的长上下文资料和面试官问题生成完整回答。输出时结构清晰，包含回答主线、关键技术细节、项目案例表达、可追问延展。不要编造上下文里没有的具体事实；资料不足时给出保守但可口述的表达。' +
+        '\n\n' +
+        answerLanguageDirective(lang)
     },
     {
       role: 'user' as const,
@@ -106,6 +111,7 @@ export async function generateDeepAnswer(
   options: DeepAnswerOptions = {}
 ): Promise<DeepAnswerResult> {
   const trace: DeepAgentTraceStep[] = [];
+  const lang = getConfig().answerLanguage;
 
   if (!workspacePath.trim()) {
     const answer = await fallbackAnswer(config, question, '用户尚未配置代码仓库目录。', options);
@@ -171,7 +177,9 @@ export async function generateDeepAnswer(
     {
       role: 'system' as const,
       content:
-        '你是资深技术面试陪练助手。你会基于代码仓库上下文，帮助候选人用口语化但专业的方式回答面试官问题。输出中文，结构清晰，包含回答主线、技术细节、项目案例、可追问延展。不要编造未在上下文中出现的具体事实；不确定时说明可以保守表述。'
+        '你是资深技术面试陪练助手。你会基于代码仓库上下文，帮助候选人用口语化但专业的方式回答面试官问题。输出时结构清晰，包含回答主线、技术细节、项目案例、可追问延展。不要编造未在上下文中出现的具体事实；不确定时说明可以保守表述。' +
+        '\n\n' +
+        answerLanguageDirective(lang)
     },
     {
       role: 'user' as const,
@@ -216,13 +224,17 @@ async function fallbackAnswer(
   reason: string,
   options: DeepAnswerOptions = {}
 ): Promise<string> {
+  const lang = getConfig().answerLanguage;
+
   return streamableChatCompletion(
     config,
     [
       {
         role: 'system',
         content:
-          '你是技术面试回答助手。请在没有代码仓库上下文时，给出谨慎、通用、可口述的中文回答，并明确避免虚构具体实现。'
+          '你是技术面试回答助手。请在没有代码仓库上下文时，给出谨慎、通用、可口述的回答，并明确避免虚构具体实现。' +
+          '\n\n' +
+          answerLanguageDirective(lang)
       },
       {
         role: 'user',

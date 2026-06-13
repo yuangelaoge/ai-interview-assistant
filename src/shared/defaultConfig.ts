@@ -46,6 +46,7 @@ export const defaultConfig: AppConfig = {
   fastAnswerMode: 'context',
   deepAnswerMode: 'codebase',
   screenshotMode: 'general',
+  answerLanguage: 'auto',
   shallowDocsPath: '',
   deepContextPath: '',
   codeWorkspacePath: '',

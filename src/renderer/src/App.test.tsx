@@ -9,6 +9,7 @@ beforeEach(() => {
     transcribeAudio: vi.fn(),
     confirmQuestion: vi.fn(),
     generateFastAnswer: vi.fn(),
+    translateQuestion: vi.fn().mockResolvedValue(''),
     generateDeepAnswer: vi.fn(),
     generateDeepAnswerStream: vi.fn(),
     onDeepAnswerStream: vi.fn(() => () => undefined),

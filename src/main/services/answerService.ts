@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { AnswerResult, AudioChunkPayload, AsrResult, DeepAnswerResult } from '../../shared/types';
 import { clampSentences } from '../utils/text';
+import { answerLanguageDirective } from '../utils/language';
 import { getConfig } from './configStore';
 import { generateDeepAnswer, generateDeepContextAnswer } from './deepAnswerAgent';
 import { loadShallowContext } from './shallowContext';
@@ -42,7 +43,9 @@ export async function generateFastAnswer(question: string): Promise<string> {
       {
         role: 'system',
         content:
-          '你是实时面试快答助手，负责双层回答架构里的第一层“先救场”。你的输出会被候选人直接照着说，所以必须像候选人本人正在回答面试官，使用第一人称“我”，直接回答问题本身。后面还会有深答模型补充完整细节，因此你只给2到4句话的口语化短答案，先说结论、再补一两个关键依据或项目表达。优先依据用户提供的简历/JD/项目资料；资料不足时也要给保守但可直接开口的回答，不能让面试官补充问题。禁止输出答题建议、方法论指导、标题、项目符号、反问句、寒暄、免责声明，以及“这个问题可以...”“可以顺着...”“您方便再补充...”这类元话术。'
+          '你是实时面试快答助手，负责双层回答架构里的第一层“先救场”。你的输出会被候选人直接照着说，所以必须像候选人本人正在回答面试官，使用第一人称“我”，直接回答问题本身。后面还会有深答模型补充完整细节，因此你只给2到4句话的口语化短答案，先说结论、再补一两个关键依据或项目表达。优先依据用户提供的简历/JD/项目资料；资料不足时也要给保守但可直接开口的回答，不能让面试官补充问题。禁止输出答题建议、方法论指导、标题、项目符号、反问句、寒暄、免责声明，以及“这个问题可以...”“可以顺着...”“您方便再补充...”这类元话术。' +
+          '\n\n' +
+          answerLanguageDirective(config.answerLanguage)
       },
       {
         role: 'user',
@@ -57,6 +60,35 @@ export async function generateFastAnswer(question: string): Promise<string> {
   );
 
   return sanitizeFastAnswer(content);
+}
+
+export async function translateText(text: string, target: 'zh' = 'zh'): Promise<string> {
+  const source = text.trim();
+
+  if (!source) {
+    return '';
+  }
+
+  const config = getConfig();
+  const content = await chatCompletion(
+    config.fastModel,
+    [
+      {
+        role: 'system',
+        content: '你是翻译助手。把用户提供的文本翻译成简体中文，只输出翻译结果，不要解释、不要加引号。'
+      },
+      {
+        role: 'user',
+        content: source
+      }
+    ],
+    {
+      temperature: 0.2,
+      maxTokens: 400
+    }
+  );
+
+  return content.trim();
 }
 
 export async function generateDeepAnswerForQuestion(

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Code2,
   Flag,
+  Languages,
   Mic,
   MicOff,
   PanelTopClose,
@@ -16,7 +17,7 @@ import {
   Sparkles,
   Zap
 } from 'lucide-react';
-import type { AnswerResult, AppConfig, RuntimeState, TranscriptSegment } from '../../shared/types';
+import type { AnswerLanguage, AnswerResult, AppConfig, RuntimeState, TranscriptSegment } from '../../shared/types';
 import type { ServiceStatus } from '../../shared/types';
 import { defaultConfig } from '../../shared/defaultConfig';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -49,6 +50,8 @@ export function App() {
   const [screenshotStatus, setScreenshotStatus] = useState<ServiceStatus>('idle');
   const [screenshotError, setScreenshotError] = useState<string | undefined>();
   const [micLevel, setMicLevel] = useState(0);
+  const [questionTranslation, setQuestionTranslation] = useState('');
+  const [translating, setTranslating] = useState(false);
   const recorderRef = useRef<MicrophoneRecorder | undefined>(undefined);
   const activeQuestionRef = useRef('');
   // 系统音频会话（面试官问题入口，顺序由主进程保证）
@@ -163,6 +166,8 @@ export function App() {
     recorderRef.current = undefined;
     setMicLevel(0);
     setDeepTrace([]);
+    setQuestionTranslation('');
+    setTranslating(false);
     setState((current) => ({
       ...current,
       isListening: false,
@@ -238,6 +243,8 @@ export function App() {
 
     captureSessionIdRef.current = sessionId;
     activeQuestionRef.current = '';
+    setQuestionTranslation('');
+    setTranslating(false);
     lastSystemTranscriptAtRef.current = 0;
     fastRequestRef.current = '';
     deepRequestRef.current = '';
@@ -622,6 +629,28 @@ export function App() {
     void generateFastOnly();
   }, [generateDeepFromFullQuestion, generateFastOnly, state.capturePhase]);
 
+  const translateCurrentQuestion = useCallback(async () => {
+    const text = activeQuestionRef.current.trim();
+
+    if (!text) {
+      setNotice('还没有可翻译的问题内容，可以继续听或在上方手动输入。');
+      return;
+    }
+
+    setTranslating(true);
+    setQuestionTranslation('');
+
+    try {
+      const translation = await window.interviewAssistant.translateQuestion(text);
+      setQuestionTranslation(translation);
+      setNotice('问题已译为中文。');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '问题翻译失败。');
+    } finally {
+      setTranslating(false);
+    }
+  }, []);
+
   useEffect(() => {
     return window.interviewAssistant.onConfirmHotkey(() => {
       confirmQuestion();
@@ -652,6 +681,7 @@ export function App() {
       const merged = mergeQuestionText(activeQuestionRef.current, text);
       activeQuestionRef.current = merged;
       lastSystemTranscriptAtRef.current = Date.now();
+      setQuestionTranslation('');
 
       const segment: TranscriptSegment = {
         id: `sys-${transcript.sessionId}-${transcript.sequence}`,
@@ -861,6 +891,12 @@ export function App() {
     void window.interviewAssistant.saveConfig(next);
     setNotice(next.autoAnswer ? '自动答题已开启：停顿后自动触发快答和深答。' : '自动答题已关闭。');
   };
+  const changeAnswerLanguage = (answerLanguage: AnswerLanguage) => {
+    const next = { ...config, answerLanguage };
+    setConfig(next);
+    void window.interviewAssistant.saveConfig(next);
+    setNotice(`答题语言已切换为：${answerLanguageLabel(answerLanguage)}`);
+  };
 
   return (
     <main className="app-shell">
@@ -877,6 +913,16 @@ export function App() {
           </div>
 
           <div className="window-actions">
+            <label className="language-select" title="答题语言">
+              <Languages size={15} />
+              <select value={config.answerLanguage} onChange={(event) => changeAnswerLanguage(event.target.value as AnswerLanguage)}>
+                <option value="auto">跟随问题</option>
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+              </select>
+            </label>
             <button
               className={captureButtonClass}
               type="button"
@@ -938,13 +984,20 @@ export function App() {
                 onChange={(event) => {
                   const value = event.target.value;
                   activeQuestionRef.current = value;
+                  setQuestionTranslation('');
                   setState((current) => ({ ...current, activeQuestion: value }));
                 }}
               />
-              <button className="primary-button" type="button" onClick={confirmQuestion}>
-                <Send size={16} />
-                {state.capturePhase === 'fastSubmitted' ? '生成深答' : '生成快答'}
-              </button>
+              <div className="question-actions">
+                <button className="primary-button" type="button" onClick={confirmQuestion}>
+                  <Send size={16} />
+                  {state.capturePhase === 'fastSubmitted' ? '生成深答' : '生成快答'}
+                </button>
+                <button className="ghost-button translate-button" type="button" onClick={translateCurrentQuestion} disabled={translating}>
+                  <Languages size={15} />
+                  {translating ? '翻译中...' : '译为中文'}
+                </button>
+              </div>
             </div>
 
             <div className="candidate-box">
@@ -954,6 +1007,12 @@ export function App() {
               </span>
               <strong>{state.activeQuestion || '等待开始收题'}</strong>
             </div>
+            {questionTranslation || translating ? (
+              <div className="translation-box">
+                <span>中文翻译</span>
+                <p>{translating ? '翻译中...' : questionTranslation}</p>
+              </div>
+            ) : null}
 
             <div className="transcript-list">
               {state.transcript.length === 0 ? (
@@ -1182,4 +1241,20 @@ function normalizeModelApiKey(apiKey: string, baseURL: string): string {
   }
 
   return `sk-${trimmed}`;
+}
+
+function answerLanguageLabel(lang: AnswerLanguage): string {
+  switch (lang) {
+    case 'zh':
+      return '中文';
+    case 'en':
+      return 'English';
+    case 'ja':
+      return '日本語';
+    case 'ko':
+      return '한국어';
+    case 'auto':
+    default:
+      return '跟随问题';
+  }
 }

@@ -4,6 +4,7 @@ export type Speaker = 'interviewer' | 'candidate';
 export type FastAnswerMode = 'zero-context' | 'context';
 export type DeepAnswerMode = 'context' | 'codebase';
 export type ScreenshotMode = 'general' | 'acm';
+export type AnswerLanguage = 'auto' | 'zh' | 'en' | 'ja' | 'ko';
 
 export interface ModelEndpointConfig {
   baseURL: string;
@@ -49,6 +50,7 @@ export interface AppConfig {
   fastAnswerMode: FastAnswerMode;
   deepAnswerMode: DeepAnswerMode;
   screenshotMode: ScreenshotMode;
+  answerLanguage: AnswerLanguage;
   shallowDocsPath: string;
   deepContextPath: string;
   codeWorkspacePath: string;
@@ -152,6 +154,7 @@ export interface IpcChannels {
   transcribeAudio: (payload: AudioChunkPayload) => Promise<AsrResult>;
   confirmQuestion: (question: string) => Promise<AnswerResult>;
   generateFastAnswer: (question: string) => Promise<string>;
+  translateQuestion: (text: string) => Promise<string>;
   generateDeepAnswer: (question: string) => Promise<DeepAnswerResult>;
   generateDeepAnswerStream: (requestId: string, question: string) => Promise<void>;
   onDeepAnswerStream: (callback: (chunk: DeepAnswerStreamChunk) => void) => () => void;

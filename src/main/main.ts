@@ -6,6 +6,7 @@ import {
   confirmQuestion,
   generateDeepAnswerForQuestion,
   generateFastAnswer,
+  translateText,
   transcribeAudio
 } from './services/answerService';
 import { generateScreenshotAnswer } from './services/screenshotAnswer';
@@ -72,6 +73,7 @@ function registerIpc(): void {
 
   ipcMain.handle('audio:transcribe', (_event, payload) => transcribeAudio(payload));
   ipcMain.handle('answer:fast', (_event, question: string) => generateFastAnswer(question));
+  ipcMain.handle('answer:translate', (_event, text: string) => translateText(text));
   ipcMain.handle('answer:deep', (_event, question: string) => generateDeepAnswerForQuestion(question));
   ipcMain.handle('answer:deep-stream', async (event, requestId: string, question: string) => {
     try {

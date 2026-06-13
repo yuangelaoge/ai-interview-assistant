@@ -146,6 +146,31 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
         <section className="endpoint-section">
           <h3>
             <KeyRound size={15} />
+            答题语言
+          </h3>
+          <label className="field">
+            <span>语言</span>
+            <select
+              value={config.answerLanguage}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  answerLanguage: event.target.value as AppConfig['answerLanguage']
+                })
+              }
+            >
+              <option value="auto">跟随问题</option>
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+            </select>
+          </label>
+        </section>
+
+        <section className="endpoint-section">
+          <h3>
+            <KeyRound size={15} />
             快答模式
           </h3>
           <label className="field">

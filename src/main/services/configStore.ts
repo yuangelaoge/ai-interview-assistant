@@ -43,6 +43,7 @@ const configSchema = z.object({
   fastAnswerMode: z.enum(['zero-context', 'context']),
   deepAnswerMode: z.enum(['context', 'codebase']),
   screenshotMode: z.enum(['general', 'acm']),
+  answerLanguage: z.enum(['auto', 'zh', 'en', 'ja', 'ko']),
   shallowDocsPath: z.string(),
   deepContextPath: z.string(),
   codeWorkspacePath: z.string(),
@@ -134,6 +135,7 @@ export function getConfig(): AppConfig {
       }
     ),
     screenshotMode: stored.screenshotMode ?? defaultConfig.screenshotMode,
+    answerLanguage: stored.answerLanguage ?? defaultConfig.answerLanguage,
     autoAnswer: stored.autoAnswer ?? defaultConfig.autoAnswer,
     screenshotHotkey: stored.screenshotHotkey || defaultConfig.screenshotHotkey
   };
