@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { KnowledgeBaseConfig, ModelEndpointConfig } from '../../shared/types';
 import { extractPdfText } from '../utils/pdf';
 import { trimContext } from '../utils/text';
-import { embedTexts } from './openAiCompatible';
+import { embedTexts, isLocalBaseURL } from './openAiCompatible';
 
 const KB_EXTENSIONS = new Set(['.md', '.txt', '.pdf']);
 const CHUNK_SIZE = 800;
@@ -162,7 +162,8 @@ async function buildIndex(dirPath: string, embedConfig: ModelEndpointConfig): Pr
 }
 
 export async function retrieveKnowledge(question: string, kb: KnowledgeBaseConfig, maxChars: number): Promise<string> {
-  if (!kb.enabled || !kb.dirPath.trim() || !kb.embedding.apiKey.trim() || !question.trim()) {
+  const localEmbedding = isLocalBaseURL(kb.embedding.baseURL);
+  if (!kb.enabled || !kb.dirPath.trim() || (!kb.embedding.apiKey.trim() && !localEmbedding) || !question.trim()) {
     return '';
   }
 

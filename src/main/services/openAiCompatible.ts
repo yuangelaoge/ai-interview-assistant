@@ -17,17 +17,24 @@ type ChatCompletionResponseLike = {
   choices?: ChatCompletionChoiceLike[];
 };
 
-export function createClient(config: ModelEndpointConfig): OpenAI {
-  if (!config.apiKey.trim()) {
-    throw new Error('缺少 API key，请先在设置中配置。');
-  }
+// 本地推理服务（Ollama / LM Studio 等）通常不校验 API key。
+export function isLocalBaseURL(baseURL: string): boolean {
+  return /(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|host\.docker\.internal)/i.test(baseURL);
+}
 
+export function createClient(config: ModelEndpointConfig): OpenAI {
   if (!config.baseURL.trim()) {
     throw new Error('缺少 API baseURL，请先在设置中配置。');
   }
 
+  const local = isLocalBaseURL(config.baseURL);
+  if (!config.apiKey.trim() && !local) {
+    throw new Error('缺少 API key，请先在设置中配置。');
+  }
+
   return new OpenAI({
-    apiKey: config.apiKey,
+    // OpenAI SDK 要求 apiKey 非空；本地服务用占位符即可（会被忽略）。
+    apiKey: config.apiKey.trim() || 'local',
     baseURL: config.baseURL
   });
 }
