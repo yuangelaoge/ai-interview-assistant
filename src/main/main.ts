@@ -6,6 +6,7 @@ import {
   confirmQuestion,
   generateDeepAnswerForQuestion,
   generateFastAnswer,
+  generateFastAnswerStream,
   translateText,
   transcribeAudio
 } from './services/answerService';
@@ -76,6 +77,28 @@ function registerIpc(): void {
 
   ipcMain.handle('audio:transcribe', (_event, payload) => transcribeAudio(payload));
   ipcMain.handle('answer:fast', (_event, question: string) => generateFastAnswer(question));
+  ipcMain.handle('answer:fast-stream', async (event, requestId: string, question: string) => {
+    try {
+      const text = await generateFastAnswerStream(question, (delta) => {
+        event.sender.send('answer:fast-stream-chunk', {
+          requestId,
+          delta
+        });
+      });
+
+      event.sender.send('answer:fast-stream-chunk', {
+        requestId,
+        text,
+        done: true
+      });
+    } catch (error) {
+      event.sender.send('answer:fast-stream-chunk', {
+        requestId,
+        error: error instanceof Error ? error.message : '快答生成失败。',
+        done: true
+      });
+    }
+  });
   ipcMain.handle('answer:translate', (_event, text: string) => translateText(text));
   ipcMain.handle('answer:deep', (_event, question: string) => generateDeepAnswerForQuestion(question));
   ipcMain.handle('answer:deep-stream', async (event, requestId: string, question: string) => {

@@ -3,6 +3,7 @@ import type {
   AppConfig,
   AudioChunkPayload,
   DeepAnswerStreamChunk,
+  FastAnswerStreamChunk,
   ScreenshotAnswerStreamChunk,
   SystemAudioStatus,
   SystemAudioTranscript
@@ -14,6 +15,12 @@ contextBridge.exposeInMainWorld('interviewAssistant', {
   transcribeAudio: (payload: AudioChunkPayload) => ipcRenderer.invoke('audio:transcribe', payload),
   confirmQuestion: (question: string) => ipcRenderer.invoke('answer:confirm-question', question),
   generateFastAnswer: (question: string) => ipcRenderer.invoke('answer:fast', question),
+  generateFastAnswerStream: (requestId: string, question: string) => ipcRenderer.invoke('answer:fast-stream', requestId, question),
+  onFastAnswerStream: (callback: (chunk: FastAnswerStreamChunk) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, chunk: FastAnswerStreamChunk) => callback(chunk);
+    ipcRenderer.on('answer:fast-stream-chunk', listener);
+    return () => ipcRenderer.removeListener('answer:fast-stream-chunk', listener);
+  },
   translateQuestion: (text: string) => ipcRenderer.invoke('answer:translate', text),
   generateDeepAnswer: (question: string) => ipcRenderer.invoke('answer:deep', question),
   generateDeepAnswerStream: (requestId: string, question: string) => ipcRenderer.invoke('answer:deep-stream', requestId, question),

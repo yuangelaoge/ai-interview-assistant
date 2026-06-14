@@ -20,6 +20,10 @@ if (!window.interviewAssistant) {
     generateFastAnswer: async () => {
       throw new Error('未连接 Electron 主进程，无法生成快答。');
     },
+    generateFastAnswerStream: async () => {
+      throw new Error('未连接 Electron 主进程，无法生成流式快答。');
+    },
+    onFastAnswerStream: () => () => undefined,
     translateQuestion: async () => {
       throw new Error('未连接 Electron 主进程，无法翻译问题。');
     },

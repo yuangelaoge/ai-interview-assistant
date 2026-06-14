@@ -20,6 +20,8 @@ beforeEach(() => {
     transcribeAudio: vi.fn(),
     confirmQuestion: vi.fn(),
     generateFastAnswer: vi.fn().mockResolvedValue('这是快答。'),
+    generateFastAnswerStream: vi.fn().mockResolvedValue(undefined),
+    onFastAnswerStream: vi.fn(() => () => undefined),
     translateQuestion: vi.fn().mockResolvedValue(''),
     generateDeepAnswer: vi.fn(),
     generateDeepAnswerStream: vi.fn().mockResolvedValue(undefined),
@@ -73,7 +75,7 @@ it('answers the current collected question without stopping audio capture', asyn
   fireEvent.click(screen.getByRole('button', { name: /回答当前问题/ }));
 
   await waitFor(() => {
-    expect(window.interviewAssistant.generateFastAnswer).toHaveBeenCalledWith('请介绍 React Hooks');
+    expect(window.interviewAssistant.generateFastAnswerStream).toHaveBeenCalledWith(expect.any(String), '请介绍 React Hooks');
     expect(window.interviewAssistant.generateDeepAnswerStream).toHaveBeenCalledWith(expect.any(String), '请介绍 React Hooks');
   });
 

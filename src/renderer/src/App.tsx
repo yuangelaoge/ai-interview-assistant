@@ -57,6 +57,7 @@ export function App() {
   const micSessionIdRef = useRef('');
   const stateRef = useRef(initialState);
   const fastRequestRef = useRef('');
+  const fastAnswerIdRef = useRef('');
   const deepRequestRef = useRef('');
   const screenshotRequestRef = useRef('');
   const silenceTimerRef = useRef<number | undefined>(undefined);
@@ -152,6 +153,7 @@ export function App() {
     captureSessionIdRef.current = '';
     micSessionIdRef.current = '';
     fastRequestRef.current = '';
+    fastAnswerIdRef.current = '';
     deepRequestRef.current = '';
     recorderRef.current?.stop();
     recorderRef.current = undefined;
@@ -238,6 +240,7 @@ export function App() {
     setTranslating(false);
     lastSystemTranscriptAtRef.current = 0;
     fastRequestRef.current = '';
+    fastAnswerIdRef.current = '';
     deepRequestRef.current = '';
     setState((current) => ({
       ...current,
@@ -362,45 +365,39 @@ export function App() {
     });
   }, [screenshotStatus]);
 
-  const generateFastForQuestion = useCallback(async (question: string, answerId: string) => {
+  const generateFastForQuestion = useCallback((question: string, answerId: string) => {
     const requestId = `fast-${answerId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     fastRequestRef.current = requestId;
+    fastAnswerIdRef.current = answerId;
 
-    try {
-      const fastAnswer = await window.interviewAssistant.generateFastAnswer(question);
-      if (fastRequestRef.current !== requestId) {
-        return;
+    setState((current) => {
+      if (current.currentAnswer?.id !== answerId) {
+        return current;
       }
 
-      setState((current) => {
-        if (current.currentAnswer?.id !== answerId) {
-          return current;
+      return {
+        ...current,
+        currentAnswer: {
+          ...current.currentAnswer,
+          fastAnswer: '',
+          fastStatus: 'thinking',
+          updatedAt: Date.now()
+        },
+        statuses: {
+          ...current.statuses,
+          fastModel: 'thinking'
         }
+      };
+    });
 
-        return {
-          ...current,
-          currentAnswer: {
-            ...current.currentAnswer,
-            fastAnswer,
-            fastStatus: 'ready',
-            updatedAt: Date.now()
-          },
-          statuses: {
-            ...current.statuses,
-            fastModel: 'ready'
-          }
-        };
-      });
-      if (fastRequestRef.current === requestId) {
-        fastRequestRef.current = '';
-      }
-      setNotice('快答已生成。');
-    } catch (error) {
+    void window.interviewAssistant.generateFastAnswerStream(requestId, question).catch((error) => {
       if (fastRequestRef.current !== requestId) {
         return;
       }
 
-      const message = error instanceof Error ? error.message : '快答生成失败。';
+      const message = error instanceof Error ? error.message : '快答流式启动失败。';
+      fastRequestRef.current = '';
+      fastAnswerIdRef.current = '';
       setState((current) => {
         if (current.currentAnswer?.id !== answerId) {
           return current;
@@ -421,11 +418,8 @@ export function App() {
           }
         };
       });
-      if (fastRequestRef.current === requestId) {
-        fastRequestRef.current = '';
-      }
       setNotice(message);
-    }
+    });
   }, []);
 
   const answerCurrentQuestion = useCallback(() => {
@@ -604,6 +598,85 @@ export function App() {
       if (status.message) {
         setNotice(status.message);
       }
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.interviewAssistant.onFastAnswerStream((chunk) => {
+      if (chunk.requestId !== fastRequestRef.current) {
+        return;
+      }
+
+      const answerId = fastAnswerIdRef.current;
+      const delta = chunk.delta;
+      if (delta) {
+        setState((current) => {
+          if (current.currentAnswer?.id !== answerId) {
+            return current;
+          }
+
+          return {
+            ...current,
+            currentAnswer: {
+              ...current.currentAnswer,
+              fastAnswer: `${current.currentAnswer.fastAnswer ?? ''}${delta}`,
+              fastStatus: 'thinking',
+              updatedAt: Date.now()
+            },
+            statuses: {
+              ...current.statuses,
+              fastModel: 'thinking'
+            }
+          };
+        });
+      }
+
+      if (!chunk.done) {
+        return;
+      }
+
+      fastRequestRef.current = '';
+      fastAnswerIdRef.current = '';
+
+      if (chunk.error) {
+        setState((current) => ({
+          ...current,
+          currentAnswer:
+            current.currentAnswer?.id === answerId
+              ? {
+                  ...current.currentAnswer,
+                  fastStatus: 'error',
+                  error: chunk.error,
+                  updatedAt: Date.now()
+                }
+              : current.currentAnswer,
+          statuses: {
+            ...current.statuses,
+            fastModel: 'error'
+          }
+        }));
+        setNotice(chunk.error);
+        return;
+      }
+
+      const finalText = chunk.text;
+      setState((current) => ({
+        ...current,
+        currentAnswer:
+          current.currentAnswer?.id === answerId
+            ? {
+                ...current.currentAnswer,
+                fastAnswer: finalText ?? current.currentAnswer.fastAnswer,
+                fastStatus: 'ready',
+                updatedAt: Date.now()
+              }
+            : current.currentAnswer,
+        statuses: {
+          ...current.statuses,
+          fastModel: 'ready'
+        }
+      }));
+      setNotice('快答已生成。');
     });
   }, []);
 

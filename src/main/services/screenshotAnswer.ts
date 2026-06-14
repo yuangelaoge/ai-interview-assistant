@@ -1,9 +1,12 @@
-import { desktopCapturer, screen } from 'electron';
+import { desktopCapturer, nativeImage, screen } from 'electron';
 import type OpenAI from 'openai';
 import { getConfig } from './configStore';
 import { streamChatCompletion } from './openAiCompatible';
 
 let isGenerating = false;
+
+const MAX_SHOT_WIDTH = 1600;
+const JPEG_QUALITY = 72;
 
 const systemPrompts = {
   general:
@@ -18,7 +21,7 @@ export async function captureScreenshot(): Promise<string> {
     const screenshot = dynamicRequire('screenshot-desktop') as (opts?: { format?: string }) => Promise<Buffer>;
     const png = await screenshot({ format: 'png' });
     if (png && png.length > 0) {
-      return `data:image/png;base64,${png.toString('base64')}`;
+      return downscaleToDataUrl(png);
     }
   } catch (error) {
     console.warn('[screenshot] screenshot-desktop 不可用，回退 desktopCapturer：', error instanceof Error ? error.message : error);
@@ -47,7 +50,35 @@ async function captureWithDesktopCapturer(): Promise<string> {
     throw new Error('未能截取屏幕，请检查屏幕录制权限');
   }
 
-  return primarySource.thumbnail.toDataURL();
+  return downscaleToDataUrl(primarySource.thumbnail.toPNG());
+}
+
+function downscaleToDataUrl(pngBuffer: Buffer): string {
+  try {
+    let image = nativeImage.createFromBuffer(pngBuffer);
+    if (image.isEmpty()) {
+      throw new Error('nativeImage 解析截图为空');
+    }
+
+    const { width } = image.getSize();
+    if (width > MAX_SHOT_WIDTH) {
+      image = image.resize({ width: MAX_SHOT_WIDTH });
+    }
+
+    if (image.isEmpty()) {
+      throw new Error('nativeImage 缩放截图为空');
+    }
+
+    const jpeg = image.toJPEG(JPEG_QUALITY);
+    if (jpeg.length === 0) {
+      throw new Error('nativeImage JPEG 编码为空');
+    }
+
+    return `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+  } catch (error) {
+    console.warn('[screenshot] 截图降采样失败，回退原始 PNG：', error instanceof Error ? error.message : error);
+    return `data:image/png;base64,${pngBuffer.toString('base64')}`;
+  }
 }
 
 export async function generateScreenshotAnswer(options: { onDelta: (d: string) => void }): Promise<string> {

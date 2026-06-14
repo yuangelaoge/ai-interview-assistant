@@ -157,6 +157,14 @@ export interface DeepAnswerStreamChunk {
   done?: boolean;
 }
 
+export interface FastAnswerStreamChunk {
+  requestId: string;
+  delta?: string;
+  done?: boolean;
+  error?: string;
+  text?: string;
+}
+
 export interface ScreenshotAnswerStreamChunk {
   requestId: string;
   delta?: string;
@@ -170,6 +178,8 @@ export interface IpcChannels {
   transcribeAudio: (payload: AudioChunkPayload) => Promise<AsrResult>;
   confirmQuestion: (question: string) => Promise<AnswerResult>;
   generateFastAnswer: (question: string) => Promise<string>;
+  generateFastAnswerStream: (requestId: string, question: string) => Promise<void>;
+  onFastAnswerStream: (callback: (chunk: FastAnswerStreamChunk) => void) => () => void;
   translateQuestion: (text: string) => Promise<string>;
   generateDeepAnswer: (question: string) => Promise<DeepAnswerResult>;
   generateDeepAnswerStream: (requestId: string, question: string) => Promise<void>;
