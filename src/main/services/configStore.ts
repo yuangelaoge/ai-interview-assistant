@@ -13,6 +13,7 @@ const endpointSchema = z.object({
 
 const asrSchema = z.object({
   provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream', 'macos-speech']),
+  language: z.string(),
   openai: endpointSchema,
   volcengine: z.object({
     endpoint: z.string(),
@@ -74,6 +75,8 @@ export function getConfig(): AppConfig {
     asr: {
       ...defaultConfig.asr,
       ...stored.asr,
+      provider: stored.asr?.provider ?? defaultConfig.asr.provider,
+      language: stored.asr?.language ?? defaultConfig.asr.language,
       openai: withEndpointEnv(
         { ...defaultConfig.asr.openai, ...stored.asr?.openai },
         {

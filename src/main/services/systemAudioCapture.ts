@@ -1,5 +1,5 @@
 // 主进程系统音频采集服务：通过 audiotee（macOS Core Audio Taps）拿到系统扬声器
-// 音频（面试官声音），按约 1 秒攒一段送现有 transcribeAudio 转写，标记 speaker='interviewer'，
+// 音频（面试官声音），按静音停顿切成完整句子后送现有 transcribeAudio 转写，标记 speaker='interviewer'，
 // 作为问题入口驱动渲染层收题状态机。
 //
 // 关键坑：audiotee 是 ESM-only，主进程编译为 CommonJS。直接 `import { AudioTee } from 'audiotee'`
@@ -13,7 +13,9 @@ import { bufferToArrayBuffer, isLikelySilentPcm16, pcm16ToWav } from '../utils/w
 
 const SAMPLE_RATE = 16000;
 const CHUNK_DURATION_MS = 200;
-const FLUSH_INTERVAL_MS = 1000;
+const SILENCE_FLUSH_MS = 700;
+const MAX_UTTERANCE_MS = 15000;
+const MIN_UTTERANCE_MS = 300;
 
 interface CaptureCallbacks {
   onTranscript: (transcript: SystemAudioTranscript) => void;
@@ -52,7 +54,10 @@ export async function startSystemAudioCapture(
   const { AudioTee } = await loadAudioTee();
   const tee = new AudioTee({ sampleRate: SAMPLE_RATE, chunkDurationMs: CHUNK_DURATION_MS });
 
-  let buffers: Buffer[] = [];
+  let utteranceChunks: Buffer[] = [];
+  let utteranceMs = 0;
+  let silenceMs = 0;
+  let hasSpeech = false;
   let sequence = 0;
   let nextEmitSequence = 0;
   let stopped = false;
@@ -60,7 +65,7 @@ export async function startSystemAudioCapture(
 
   // 诊断计数：用于区分「audiotee 没产出任何数据」与「拿到的全是静音（多半是权限没授权）」。
   let totalBytes = 0;
-  let nonSilentChunks = 0;
+  let sawSpeech = false;
   let silenceWatchdog: ReturnType<typeof setTimeout> | undefined;
 
   // 转写是并发的，可能乱序返回；按 sequence 顺序对外 emit，保证拼接顺序。
@@ -83,54 +88,68 @@ export async function startSystemAudioCapture(
     }
   };
 
-  const flush = async (): Promise<void> => {
-    if (buffers.length === 0) {
+  const flushUtterance = (): void => {
+    if (utteranceChunks.length === 0) {
       return;
     }
 
-    const pcm = Buffer.concat(buffers);
-    buffers = [];
+    const pcm = Buffer.concat(utteranceChunks);
+    utteranceChunks = [];
+    utteranceMs = 0;
+    silenceMs = 0;
+    hasSpeech = false;
     const seq = sequence;
     sequence += 1;
 
-    if (isLikelySilentPcm16(pcm)) {
-      pending.set(seq, '');
+    void (async () => {
+      try {
+        const result = await transcribeAudio({
+          mimeType: 'audio/wav',
+          data: bufferToArrayBuffer(pcm16ToWav(pcm, SAMPLE_RATE)),
+          sequence: seq,
+          captureSessionId: sessionId,
+          speaker: 'interviewer'
+        });
+        pending.set(seq, (result.text ?? '').trim());
+      } catch (error) {
+        pending.set(seq, '');
+        callbacks.onStatus({
+          sessionId,
+          status: 'error',
+          message: `系统音频转写失败，已跳过本段：${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+
       emitOrdered();
-      return;
-    }
-
-    nonSilentChunks += 1;
-
-    try {
-      const result = await transcribeAudio({
-        mimeType: 'audio/wav',
-        data: bufferToArrayBuffer(pcm16ToWav(pcm, SAMPLE_RATE)),
-        sequence: seq,
-        captureSessionId: sessionId,
-        speaker: 'interviewer'
-      });
-      pending.set(seq, (result.text ?? '').trim());
-    } catch (error) {
-      pending.set(seq, '');
-      callbacks.onStatus({
-        sessionId,
-        status: 'error',
-        message: `系统音频转写失败，已跳过本段：${error instanceof Error ? error.message : String(error)}`
-      });
-    }
-
-    emitOrdered();
+    })();
   };
-
-  const interval = setInterval(() => {
-    void flush();
-  }, FLUSH_INTERVAL_MS);
 
   tee.on('data', (chunk) => {
     const data = chunk?.data;
     if (data && data.length > 0) {
       totalBytes += data.length;
-      buffers.push(Buffer.from(data));
+      const buffer = Buffer.from(data);
+      const chunkMs = (buffer.length / 2 / SAMPLE_RATE) * 1000;
+      const silent = isLikelySilentPcm16(buffer);
+
+      if (!silent) {
+        sawSpeech = true;
+        hasSpeech = true;
+        utteranceChunks.push(buffer);
+        utteranceMs += chunkMs;
+        silenceMs = 0;
+      } else if (hasSpeech) {
+        // 保留一句话尾部的静音，帮助 Whisper 判断停顿和断句；前导静音直接丢弃。
+        utteranceChunks.push(buffer);
+        utteranceMs += chunkMs;
+        silenceMs += chunkMs;
+      }
+
+      if (hasSpeech && silenceMs >= SILENCE_FLUSH_MS && utteranceMs >= MIN_UTTERANCE_MS) {
+        flushUtterance();
+      } else if (utteranceMs >= MAX_UTTERANCE_MS) {
+        flushUtterance();
+      }
     }
   });
 
@@ -163,12 +182,13 @@ export async function startSystemAudioCapture(
         return;
       }
       stopped = true;
-      clearInterval(interval);
       if (silenceWatchdog) {
         clearTimeout(silenceWatchdog);
         silenceWatchdog = undefined;
       }
-      await flush();
+      if (hasSpeech) {
+        flushUtterance();
+      }
       try {
         await tee.stop();
       } catch {
@@ -183,7 +203,7 @@ export async function startSystemAudioCapture(
   // 静音看门狗：start 后若一直没有非静音音频，多半是没拿到「系统音频录制」权限，
   // 而不是真的没人说话——audiotee 在未授权的终端里会默默录到一片静音。
   silenceWatchdog = setTimeout(() => {
-    if (stopped || nonSilentChunks > 0) {
+    if (stopped || sawSpeech) {
       return;
     }
     const hint =

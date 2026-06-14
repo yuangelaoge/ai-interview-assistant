@@ -44,6 +44,7 @@ export interface VolcengineSaucConfig {
 
 export interface AsrConfig {
   provider: AsrProvider;
+  language: string;
   openai: ModelEndpointConfig;
   volcengine: VolcengineAsrConfig;
   volcengineSauc: VolcengineSaucConfig;

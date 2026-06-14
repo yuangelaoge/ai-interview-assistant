@@ -22,7 +22,7 @@ export async function transcribeAudio(payload: AudioChunkPayload): Promise<AsrRe
   } else if (config.asr.provider === 'macos-speech') {
     text = await transcribeWithMacosSpeech(payload);
   } else {
-    text = await transcribeWithOpenAiCompatibleApi(config.asr.openai, payload);
+    text = await transcribeWithOpenAiCompatibleApi(config.asr.openai, payload, { language: config.asr.language });
   }
 
   return {

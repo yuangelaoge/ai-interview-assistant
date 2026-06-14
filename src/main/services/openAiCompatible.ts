@@ -34,12 +34,14 @@ export function createClient(config: ModelEndpointConfig): OpenAI {
 
 export async function transcribeWithOpenAiCompatibleApi(
   config: ModelEndpointConfig,
-  payload: AudioChunkPayload
+  payload: AudioChunkPayload,
+  options: { language?: string } = {}
 ): Promise<string> {
   const client = createClient(config);
   const extension = payload.mimeType.includes('webm') ? 'webm' : 'wav';
   const audioPath = path.join(os.tmpdir(), `interview-audio-${Date.now()}.${extension}`);
   const buffer = Buffer.from(payload.data);
+  const language = options.language?.trim();
 
   await fs.promises.writeFile(audioPath, buffer);
 
@@ -47,13 +49,26 @@ export async function transcribeWithOpenAiCompatibleApi(
     const result = await client.audio.transcriptions.create({
       file: fs.createReadStream(audioPath),
       model: config.model,
-      response_format: 'json'
+      response_format: 'json',
+      temperature: 0,
+      prompt: getTranscriptionPrompt(language),
+      ...(language ? { language } : {})
     });
 
     return result.text?.trim() ?? '';
   } finally {
     await fs.promises.rm(audioPath, { force: true });
   }
+}
+
+function getTranscriptionPrompt(language?: string): string {
+  const normalizedLanguage = language?.toLowerCase();
+
+  if (!normalizedLanguage || normalizedLanguage === 'zh') {
+    return '以下是一段中文技术面试对话，请输出规范的简体中文，不要中英混杂乱码。';
+  }
+
+  return 'The following is a technical job interview conversation.';
 }
 
 export async function chatCompletion(

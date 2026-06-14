@@ -149,12 +149,35 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
           ) : config.asr.provider === 'macos-speech' ? (
             <MacosSpeechFields />
           ) : (
-            <EndpointFields
-              title="OpenAI 兼容 ASR"
-              endpoint={config.asr.openai}
-              onChange={(patch) => updateEndpoint('asr', patch)}
-              embedded
-            />
+            <>
+              <EndpointFields
+                title="OpenAI 兼容 ASR"
+                endpoint={config.asr.openai}
+                onChange={(patch) => updateEndpoint('asr', patch)}
+                embedded
+              />
+              <label className="field">
+                <span>识别语言</span>
+                <select
+                  value={config.asr.language}
+                  onChange={(event) =>
+                    onChange({
+                      ...config,
+                      asr: {
+                        ...config.asr,
+                        language: event.target.value
+                      }
+                    })
+                  }
+                >
+                  <option value="">自动</option>
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                  <option value="ja">日本語</option>
+                  <option value="ko">한국어</option>
+                </select>
+              </label>
+            </>
           )}
         </section>
 

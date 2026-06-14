@@ -3,6 +3,7 @@ import type { AppConfig } from './types';
 export const defaultConfig: AppConfig = {
   asr: {
     provider: 'openai-compatible',
+    language: 'zh',
     openai: {
       baseURL: 'https://api.openai.com/v1',
       apiKey: '',
