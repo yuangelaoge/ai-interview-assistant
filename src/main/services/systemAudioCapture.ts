@@ -58,6 +58,11 @@ export async function startSystemAudioCapture(
   let stopped = false;
   const pending = new Map<number, string>();
 
+  // 诊断计数：用于区分「audiotee 没产出任何数据」与「拿到的全是静音（多半是权限没授权）」。
+  let totalBytes = 0;
+  let nonSilentChunks = 0;
+  let silenceWatchdog: ReturnType<typeof setTimeout> | undefined;
+
   // 转写是并发的，可能乱序返回；按 sequence 顺序对外 emit，保证拼接顺序。
   const emitOrdered = (): void => {
     while (pending.has(nextEmitSequence)) {
@@ -94,6 +99,8 @@ export async function startSystemAudioCapture(
       return;
     }
 
+    nonSilentChunks += 1;
+
     try {
       const result = await transcribeAudio({
         mimeType: 'audio/wav',
@@ -122,11 +129,26 @@ export async function startSystemAudioCapture(
   tee.on('data', (chunk) => {
     const data = chunk?.data;
     if (data && data.length > 0) {
+      totalBytes += data.length;
       buffers.push(Buffer.from(data));
     }
   });
 
+  // audiotee 二进制通过 stderr 上报生命周期/日志/错误；之前没监听，导致权限等问题被吞。
+  tee.on('start', () => {
+    console.log('[systemAudio] audiotee stream_start');
+  });
+
+  tee.on('stop', () => {
+    console.log('[systemAudio] audiotee stream_stop');
+  });
+
+  tee.on('log', (level, message) => {
+    console.log(`[systemAudio][${level}] ${message.message}`, message.context ?? '');
+  });
+
   tee.on('error', (error: Error) => {
+    console.error('[systemAudio] audiotee error:', error.message);
     callbacks.onStatus({
       sessionId,
       status: 'error',
@@ -142,6 +164,10 @@ export async function startSystemAudioCapture(
       }
       stopped = true;
       clearInterval(interval);
+      if (silenceWatchdog) {
+        clearTimeout(silenceWatchdog);
+        silenceWatchdog = undefined;
+      }
       await flush();
       try {
         await tee.stop();
@@ -153,6 +179,20 @@ export async function startSystemAudioCapture(
 
   await tee.start();
   callbacks.onStatus({ sessionId, status: 'listening' });
+
+  // 静音看门狗：start 后若一直没有非静音音频，多半是没拿到「系统音频录制」权限，
+  // 而不是真的没人说话——audiotee 在未授权的终端里会默默录到一片静音。
+  silenceWatchdog = setTimeout(() => {
+    if (stopped || nonSilentChunks > 0) {
+      return;
+    }
+    const hint =
+      totalBytes === 0
+        ? '已开始监听，但 5 秒内未收到任何系统音频数据。请确认 audiotee 已启动，且系统正在播放声音。'
+        : '已开始监听，但收到的系统音频全是静音。多半是未授予「系统音频录制」权限：打开 系统设置 > 隐私与安全性 > 屏幕与系统音频录制，在最下方「仅系统音频录制」中加入你启动应用的终端（或本应用），然后重启应用。注意 iTerm / VSCode / Cursor 内置终端常常不弹授权、直接录到静音，可改用系统自带「终端」运行。';
+    console.warn('[systemAudio] silence watchdog:', hint);
+    callbacks.onStatus({ sessionId, status: 'error', message: hint });
+  }, 5000);
 }
 
 export async function stopSystemAudioCapture(): Promise<void> {
