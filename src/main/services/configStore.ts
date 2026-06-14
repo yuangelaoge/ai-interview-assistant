@@ -59,7 +59,8 @@ const configSchema = z.object({
   codeWorkspacePath: z.string(),
   confirmHotkey: z.string(),
   autoAnswer: z.boolean(),
-  screenshotHotkey: z.string()
+  screenshotHotkey: z.string(),
+  screenshotTripleClick: z.boolean()
 });
 
 const configFileName = 'interview-assistant-config.json';
@@ -172,7 +173,8 @@ export function getConfig(): AppConfig {
     screenshotMode: stored.screenshotMode ?? defaultConfig.screenshotMode,
     answerLanguage: stored.answerLanguage ?? defaultConfig.answerLanguage,
     autoAnswer: stored.autoAnswer ?? defaultConfig.autoAnswer,
-    screenshotHotkey: stored.screenshotHotkey || defaultConfig.screenshotHotkey
+    screenshotHotkey: stored.screenshotHotkey || defaultConfig.screenshotHotkey,
+    screenshotTripleClick: stored.screenshotTripleClick ?? defaultConfig.screenshotTripleClick
   };
 
   return configSchema.parse(current);

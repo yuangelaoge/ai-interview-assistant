@@ -422,6 +422,15 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             <span>笔试截图热键</span>
             <input value={config.screenshotHotkey} onChange={(event) => onChange({ ...config, screenshotHotkey: event.target.value })} />
           </label>
+
+          <label className="field checkbox-field">
+            <span>全局三击触发截图（需辅助功能权限）</span>
+            <input
+              checked={config.screenshotTripleClick}
+              type="checkbox"
+              onChange={(event) => onChange({ ...config, screenshotTripleClick: event.target.checked })}
+            />
+          </label>
         </section>
 
         <label className="field">

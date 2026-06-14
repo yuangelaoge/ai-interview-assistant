@@ -18,6 +18,8 @@
     "audiotee": "^0.0.7",
     "lucide-react": "^0.561.0",
     "openai": "^6.10.0",
+    "screenshot-desktop": "^1.15.1",
+    "uiohook-napi": "^1.5.4",
     "vite": "^7.3.0",
     "ws": "^8.20.1",
     "zod": "^4.1.13"
@@ -46,6 +48,11 @@
       "dist/**/*",
       "!dist/helpers/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/screenshot-desktop/**",
+      "node_modules/uiohook-napi/**",
+      "node_modules/audiotee/**"
     ],
     "directories": {
       "output": "release"

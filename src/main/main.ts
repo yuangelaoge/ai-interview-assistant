@@ -10,11 +10,13 @@ import {
   transcribeAudio
 } from './services/answerService';
 import { generateScreenshotAnswer } from './services/screenshotAnswer';
+import { startTripleClickTrigger, type GlobalTriggerHandle } from './services/globalTrigger';
 import { startSystemAudioCapture, stopSystemAudioCapture } from './services/systemAudioCapture';
 
 let mainWindow: BrowserWindow | undefined;
 let currentHotkey = '';
 let currentScreenshotHotkey = '';
+let tripleClickHandle: GlobalTriggerHandle | undefined;
 
 app.setName('ai-interview-assistant');
 
@@ -68,6 +70,7 @@ function registerIpc(): void {
     const saved = saveConfig(config);
     registerConfirmHotkey(saved.confirmHotkey);
     registerScreenshotHotkey(saved.screenshotHotkey);
+    applyTripleClickTrigger(saved.screenshotTripleClick);
     return saved;
   });
 
@@ -211,6 +214,17 @@ function registerScreenshotHotkey(accelerator: string): boolean {
   return ok;
 }
 
+function applyTripleClickTrigger(enabled: boolean): void {
+  tripleClickHandle?.stop();
+  tripleClickHandle = undefined;
+
+  if (enabled) {
+    tripleClickHandle = startTripleClickTrigger(() => {
+      mainWindow?.webContents.send('screenshot:hotkey');
+    });
+  }
+}
+
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(['media', 'microphone'].includes(String(permission)));
@@ -225,6 +239,7 @@ app.whenReady().then(() => {
   const config = getConfig();
   registerConfirmHotkey(config.confirmHotkey);
   registerScreenshotHotkey(config.screenshotHotkey);
+  applyTripleClickTrigger(config.screenshotTripleClick);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -240,6 +255,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  tripleClickHandle?.stop();
   globalShortcut.unregisterAll();
   void stopSystemAudioCapture();
 });

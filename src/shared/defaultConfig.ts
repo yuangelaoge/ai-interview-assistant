@@ -68,5 +68,6 @@ export const defaultConfig: AppConfig = {
   codeWorkspacePath: '',
   confirmHotkey: 'CommandOrControl+Shift+Enter',
   autoAnswer: false,
-  screenshotHotkey: 'CommandOrControl+Shift+S'
+  screenshotHotkey: 'CommandOrControl+Shift+S',
+  screenshotTripleClick: true
 };

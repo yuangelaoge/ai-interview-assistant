@@ -72,6 +72,7 @@ export interface AppConfig {
   confirmHotkey: string;
   autoAnswer: boolean;
   screenshotHotkey: string;
+  screenshotTripleClick: boolean;
 }
 
 export interface TranscriptSegment {

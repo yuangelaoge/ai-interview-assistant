@@ -13,6 +13,21 @@ const systemPrompts = {
 };
 
 export async function captureScreenshot(): Promise<string> {
+  try {
+    const dynamicRequire = eval('require') as NodeRequire;
+    const screenshot = dynamicRequire('screenshot-desktop') as (opts?: { format?: string }) => Promise<Buffer>;
+    const png = await screenshot({ format: 'png' });
+    if (png && png.length > 0) {
+      return `data:image/png;base64,${png.toString('base64')}`;
+    }
+  } catch (error) {
+    console.warn('[screenshot] screenshot-desktop 不可用，回退 desktopCapturer：', error instanceof Error ? error.message : error);
+  }
+
+  return captureWithDesktopCapturer();
+}
+
+async function captureWithDesktopCapturer(): Promise<string> {
   const primaryDisplay = screen.getPrimaryDisplay();
   const physicalWidth = Math.round(primaryDisplay.size.width * primaryDisplay.scaleFactor);
   const physicalHeight = Math.round(primaryDisplay.size.height * primaryDisplay.scaleFactor);
