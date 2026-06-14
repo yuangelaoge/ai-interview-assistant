@@ -12,9 +12,10 @@ const endpointSchema = z.object({
 });
 
 const asrSchema = z.object({
-  provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream', 'macos-speech']),
+  provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream', 'macos-speech', 'openai-realtime']),
   language: z.string(),
   openai: endpointSchema,
+  openaiRealtime: endpointSchema,
   volcengine: z.object({
     endpoint: z.string(),
     apiKey: z.string(),
@@ -83,6 +84,14 @@ export function getConfig(): AppConfig {
           baseURL: 'AI_INTERVIEW_ASR_OPENAI_BASE_URL',
           apiKey: 'AI_INTERVIEW_ASR_OPENAI_API_KEY',
           model: 'AI_INTERVIEW_ASR_OPENAI_MODEL'
+        }
+      ),
+      openaiRealtime: withEndpointEnv(
+        { ...defaultConfig.asr.openaiRealtime, ...stored.asr?.openaiRealtime },
+        {
+          baseURL: 'AI_INTERVIEW_OPENAI_REALTIME_BASE_URL',
+          apiKey: 'AI_INTERVIEW_OPENAI_REALTIME_API_KEY',
+          model: 'AI_INTERVIEW_OPENAI_REALTIME_MODEL'
         }
       ),
       volcengine: {

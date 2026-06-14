@@ -19,7 +19,12 @@ export interface KnowledgeBaseConfig {
   topK: number;
 }
 
-export type AsrProvider = 'openai-compatible' | 'volcengine-auc-flash' | 'volcengine-sauc-stream' | 'macos-speech';
+export type AsrProvider =
+  | 'openai-compatible'
+  | 'volcengine-auc-flash'
+  | 'volcengine-sauc-stream'
+  | 'macos-speech'
+  | 'openai-realtime';
 
 export interface VolcengineAsrConfig {
   endpoint: string;
@@ -46,6 +51,7 @@ export interface AsrConfig {
   provider: AsrProvider;
   language: string;
   openai: ModelEndpointConfig;
+  openaiRealtime: ModelEndpointConfig;
   volcengine: VolcengineAsrConfig;
   volcengineSauc: VolcengineSaucConfig;
 }

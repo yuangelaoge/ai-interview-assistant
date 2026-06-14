@@ -19,7 +19,7 @@
   - 代码仓库模式：只读扫描代码仓库，读取相关文件片段后生成回答。
 - 快答模型、深答模型、语音识别 API 三套配置互相独立。
 - 模型接口默认按 OpenAI 兼容协议设计。
-- 支持 OpenAI 兼容 Whisper、macOS 系统语音识别、火山引擎 LAS ASR 和实验性的火山流式 ASR。
+- 支持 OpenAI 兼容 Whisper、OpenAI Realtime 流式转写、macOS 系统语音识别、火山引擎 LAS ASR 和实验性的火山流式 ASR。
 - 深答支持流式输出，生成过程中会持续追加到界面。
 
 ## 技术栈
@@ -85,6 +85,16 @@ AI_INTERVIEW_DEEP_MODEL_NAME=gpt-4.1
 AI_INTERVIEW_ASR_OPENAI_BASE_URL=https://api.openai.com/v1
 AI_INTERVIEW_ASR_OPENAI_API_KEY=
 AI_INTERVIEW_ASR_OPENAI_MODEL=whisper-1
+```
+
+### OpenAI Realtime 系统音频转写
+
+选择 `OpenAI 实时转写(gpt-4o-transcribe)` provider 时，系统音频会以 24k PCM 持续推送到 OpenAI Realtime API，由服务端 VAD 自动断句。
+
+```bash
+AI_INTERVIEW_OPENAI_REALTIME_BASE_URL=https://api.openai.com/v1
+AI_INTERVIEW_OPENAI_REALTIME_API_KEY=
+AI_INTERVIEW_OPENAI_REALTIME_MODEL=gpt-4o-transcribe
 ```
 
 ### macOS 系统语音识别

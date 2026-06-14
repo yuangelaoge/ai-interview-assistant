@@ -834,6 +834,10 @@ export function App() {
           ...config.asr.openai,
           apiKey: config.asr.openai.apiKey || currentConfig.asr.openai.apiKey
         },
+        openaiRealtime: {
+          ...config.asr.openaiRealtime,
+          apiKey: config.asr.openaiRealtime.apiKey || currentConfig.asr.openaiRealtime.apiKey
+        },
         volcengine: {
           ...config.asr.volcengine,
           apiKey: config.asr.volcengine.apiKey || currentConfig.asr.volcengine.apiKey,
@@ -1156,6 +1160,14 @@ export function App() {
 
 function validateAsrConfig(config: AppConfig): string | undefined {
   if (config.asr.provider === 'macos-speech') {
+    return undefined;
+  }
+
+  if (config.asr.provider === 'openai-realtime') {
+    if (!config.asr.openaiRealtime.apiKey.trim()) {
+      return '请先在设置里填写 OpenAI Realtime 的 apiKey。';
+    }
+
     return undefined;
   }
 

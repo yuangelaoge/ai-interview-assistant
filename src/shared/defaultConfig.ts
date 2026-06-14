@@ -9,6 +9,11 @@ export const defaultConfig: AppConfig = {
       apiKey: '',
       model: 'whisper-1'
     },
+    openaiRealtime: {
+      baseURL: 'https://api.openai.com/v1',
+      apiKey: '',
+      model: 'gpt-4o-transcribe'
+    },
     volcengine: {
       endpoint: 'https://operator.las.cn-beijing.volces.com/api/v1',
       apiKey: '',

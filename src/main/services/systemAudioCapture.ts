@@ -1,6 +1,7 @@
 // 主进程系统音频采集服务：通过 audiotee（macOS Core Audio Taps）拿到系统扬声器
-// 音频（面试官声音），按静音停顿切成完整句子后送现有 transcribeAudio 转写，标记 speaker='interviewer'，
-// 作为问题入口驱动渲染层收题状态机。
+// 音频（面试官声音），按 provider 分成两路：
+// - openai-realtime：24k PCM 直推 Realtime WebSocket，使用 completed 句子驱动收题。
+// - 其它 provider：保留 16k PCM 静音切句 + 文件转写，标记 speaker='interviewer'。
 //
 // 关键坑：audiotee 是 ESM-only，主进程编译为 CommonJS。直接 `import { AudioTee } from 'audiotee'`
 // 会被 tsc 编成 require() 触发 ERR_REQUIRE_ESM。这里用 `import type` 拿类型（编译期擦除），
@@ -9,9 +10,12 @@
 import type { AudioTee as AudioTeeClass } from 'audiotee';
 import type { SystemAudioStatus, SystemAudioTranscript } from '../../shared/types';
 import { transcribeAudio } from './answerService';
+import { getConfig } from './configStore';
+import { startRealtimeTranscription, type RealtimeSession } from './openaiRealtimeAsr';
 import { bufferToArrayBuffer, isLikelySilentPcm16, pcm16ToWav } from '../utils/wav';
 
-const SAMPLE_RATE = 16000;
+const FILE_SAMPLE_RATE = 16000;
+const REALTIME_SAMPLE_RATE = 24000;
 const CHUNK_DURATION_MS = 200;
 const SILENCE_FLUSH_MS = 700;
 const MAX_UTTERANCE_MS = 15000;
@@ -52,7 +56,11 @@ export async function startSystemAudioCapture(
   }
 
   const { AudioTee } = await loadAudioTee();
-  const tee = new AudioTee({ sampleRate: SAMPLE_RATE, chunkDurationMs: CHUNK_DURATION_MS });
+  const config = getConfig();
+  const provider = config.asr.provider;
+  const useRealtime = provider === 'openai-realtime';
+  const sampleRate = useRealtime ? REALTIME_SAMPLE_RATE : FILE_SAMPLE_RATE;
+  const tee = new AudioTee({ sampleRate, chunkDurationMs: CHUNK_DURATION_MS });
 
   let utteranceChunks: Buffer[] = [];
   let utteranceMs = 0;
@@ -60,6 +68,8 @@ export async function startSystemAudioCapture(
   let hasSpeech = false;
   let sequence = 0;
   let nextEmitSequence = 0;
+  let realtimeSeq = 0;
+  let realtimeSession: RealtimeSession | undefined;
   let stopped = false;
   const pending = new Map<number, string>();
 
@@ -105,7 +115,7 @@ export async function startSystemAudioCapture(
       try {
         const result = await transcribeAudio({
           mimeType: 'audio/wav',
-          data: bufferToArrayBuffer(pcm16ToWav(pcm, SAMPLE_RATE)),
+          data: bufferToArrayBuffer(pcm16ToWav(pcm, sampleRate)),
           sequence: seq,
           captureSessionId: sessionId,
           speaker: 'interviewer'
@@ -124,16 +134,55 @@ export async function startSystemAudioCapture(
     })();
   };
 
+  if (useRealtime) {
+    realtimeSession = await startRealtimeTranscription(config.asr.openaiRealtime, config.asr.language, {
+      onTranscript: (text, isFinal) => {
+        const normalizedText = text.trim();
+        if (!isFinal || !normalizedText) {
+          return;
+        }
+
+        callbacks.onTranscript({
+          sessionId,
+          sequence: realtimeSeq,
+          text: normalizedText,
+          timestamp: Date.now(),
+          confidence: 0.9
+        });
+        realtimeSeq += 1;
+      },
+      onError: (message) => {
+        callbacks.onStatus({
+          sessionId,
+          status: 'error',
+          message: `实时转写：${message}`
+        });
+      },
+      onOpen: () => {
+        console.log('[systemAudio] OpenAI Realtime stream_open');
+      }
+    });
+  }
+
   tee.on('data', (chunk) => {
     const data = chunk?.data;
     if (data && data.length > 0) {
-      totalBytes += data.length;
       const buffer = Buffer.from(data);
-      const chunkMs = (buffer.length / 2 / SAMPLE_RATE) * 1000;
+      totalBytes += buffer.length;
       const silent = isLikelySilentPcm16(buffer);
 
       if (!silent) {
         sawSpeech = true;
+      }
+
+      if (useRealtime) {
+        realtimeSession?.sendPcm(buffer);
+        return;
+      }
+
+      const chunkMs = (buffer.length / 2 / sampleRate) * 1000;
+
+      if (!silent) {
         hasSpeech = true;
         utteranceChunks.push(buffer);
         utteranceMs += chunkMs;
@@ -186,7 +235,10 @@ export async function startSystemAudioCapture(
         clearTimeout(silenceWatchdog);
         silenceWatchdog = undefined;
       }
-      if (hasSpeech) {
+      if (useRealtime) {
+        realtimeSession?.close();
+        realtimeSession = undefined;
+      } else if (hasSpeech) {
         flushUtterance();
       }
       try {
@@ -197,7 +249,13 @@ export async function startSystemAudioCapture(
     }
   };
 
-  await tee.start();
+  try {
+    await tee.start();
+  } catch (error) {
+    activeCapture = undefined;
+    realtimeSession?.close();
+    throw error;
+  }
   callbacks.onStatus({ sessionId, status: 'listening' });
 
   // 静音看门狗：start 后若一直没有非静音音频，多半是没拿到「系统音频录制」权限，

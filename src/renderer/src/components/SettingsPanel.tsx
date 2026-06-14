@@ -10,7 +10,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPanelProps) {
   const updateEndpoint = (
-    key: 'asr' | 'fastModel' | 'deepModel' | 'screenshotModel' | 'knowledgeBaseEmbedding',
+    key: 'asr' | 'openaiRealtime' | 'fastModel' | 'deepModel' | 'screenshotModel' | 'knowledgeBaseEmbedding',
     patch: Partial<ModelEndpointConfig>
   ) => {
     if (key === 'asr') {
@@ -20,6 +20,20 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
           ...config.asr,
           openai: {
             ...config.asr.openai,
+            ...patch
+          }
+        }
+      });
+      return;
+    }
+
+    if (key === 'openaiRealtime') {
+      onChange({
+        ...config,
+        asr: {
+          ...config.asr,
+          openaiRealtime: {
+            ...config.asr.openaiRealtime,
             ...patch
           }
         }
@@ -110,6 +124,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
               <option value="volcengine-sauc-stream">火山流式语音识别</option>
               <option value="volcengine-auc-flash">LAS 豆包语音 ASR</option>
               <option value="macos-speech">macOS 系统语音识别</option>
+              <option value="openai-realtime">OpenAI 实时转写(gpt-4o-transcribe)</option>
               <option value="openai-compatible">OpenAI 兼容 Whisper</option>
             </select>
           </label>
@@ -148,6 +163,16 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             />
           ) : config.asr.provider === 'macos-speech' ? (
             <MacosSpeechFields />
+          ) : config.asr.provider === 'openai-realtime' ? (
+            <>
+              <EndpointFields
+                title="OpenAI 实时转写(gpt-4o-transcribe)"
+                endpoint={config.asr.openaiRealtime}
+                onChange={(patch) => updateEndpoint('openaiRealtime', patch)}
+                embedded
+              />
+              <AsrLanguageField config={config} onChange={onChange} />
+            </>
           ) : (
             <>
               <EndpointFields
@@ -156,27 +181,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
                 onChange={(patch) => updateEndpoint('asr', patch)}
                 embedded
               />
-              <label className="field">
-                <span>识别语言</span>
-                <select
-                  value={config.asr.language}
-                  onChange={(event) =>
-                    onChange({
-                      ...config,
-                      asr: {
-                        ...config.asr,
-                        language: event.target.value
-                      }
-                    })
-                  }
-                >
-                  <option value="">自动</option>
-                  <option value="zh">中文</option>
-                  <option value="en">English</option>
-                  <option value="ja">日本語</option>
-                  <option value="ko">한국어</option>
-                </select>
-              </label>
+              <AsrLanguageField config={config} onChange={onChange} />
             </>
           )}
         </section>
@@ -451,6 +456,38 @@ function MacosSpeechFields() {
       使用 macOS Speech framework 调用系统语音识别，不需要 API Key。首次使用会触发系统语音识别权限；可通过
       AI_INTERVIEW_MACOS_SPEECH_LOCALE 和 AI_INTERVIEW_MACOS_SPEECH_ON_DEVICE 调整语言和本机识别偏好。
     </p>
+  );
+}
+
+function AsrLanguageField({
+  config,
+  onChange
+}: {
+  config: AppConfig;
+  onChange: (config: AppConfig) => void;
+}) {
+  return (
+    <label className="field">
+      <span>识别语言</span>
+      <select
+        value={config.asr.language}
+        onChange={(event) =>
+          onChange({
+            ...config,
+            asr: {
+              ...config.asr,
+              language: event.target.value
+            }
+          })
+        }
+      >
+        <option value="">自动</option>
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+      </select>
+    </label>
   );
 }
 
