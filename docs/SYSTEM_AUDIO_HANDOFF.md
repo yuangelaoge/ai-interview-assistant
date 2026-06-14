@@ -22,7 +22,7 @@
 | 系统音频（interviewer） | **主进程** spawn audiotee | Core Audio Taps，16k PCM | 问题入口，驱动现有收题状态机 |
 | 麦克风（candidate） | 渲染层 getUserMedia | 现有 `MicrophoneRecorder` | 仅显示，标 candidate，不进 activeQuestion |
 
-设计原则：**问题入口只来自系统音频**。系统音频独占现有收题状态机（activeQuestion 拼接 / 两段式停止 / 快答深答）。麦克风只转写显示，**绝不触碰** sequence 重组逻辑。
+设计原则：**问题入口只来自系统音频**。系统音频独占现有收题状态机（activeQuestion 拼接 / 当前问题回答 / 快答深答）。麦克风只转写显示，**绝不触碰** sequence 重组逻辑。
 
 ## audiotee 关键事实（集成必读）
 
@@ -68,7 +68,7 @@
 ## 下一步要做什么
 
 ### ⚠️ Task C 端到端真机验证（未做，需 macOS + 真实音频）
-`npm run dev`，用 openai-compatible ASR：系统放面试官提问音频 → activeQuestion 累积（面试官条目，蓝）；对麦克风说话 → 候选人条目出现（绿）且不进 activeQuestion；第一次停止出快答、第二次停止出深答。注意首次跑会弹 macOS 录屏/音频采集授权。
+`npm run dev`，用 openai-compatible ASR：系统放面试官提问音频 → activeQuestion 累积（面试官条目，蓝）；对麦克风说话 → 候选人条目出现（绿）且不进 activeQuestion；按主按钮或确认热键后，快答和深答同时启动且收音继续。注意首次跑会弹 macOS 录屏/音频采集授权。
 
 ### Task A 实现细节存档（已完成，供回溯）
 `src/main/services/systemAudioCapture.ts`：
@@ -94,13 +94,13 @@
 - **系统音频不再走渲染层采集**，改为：`startListening` 时调 `window.interviewAssistant.startSystemAudio(sessionId)`，并 `onSystemAudioTranscript` 监听文本 → 喂现有收题状态机（activeQuestion 拼接、标 interviewer）。
 - 麦克风：保留 `MicrophoneRecorder`，但 `handleMicChunk` 转写后只 push transcript（标 candidate），**不调** `markSequenceComplete`/`flushOrderedTranscript`，不动 activeQuestion。
 - ref 隔离：`captureSessionIdRef`/`pendingTranscriptionsRef` 按 system/mic 分开（系统音频的顺序现在在主进程管，渲染层主要管 mic + 显示）。
-- 两段式停止（`generateFastOnly`/`generateDeepFromFullQuestion`）：第二次停止时 `stopSystemAudio()` + stop mic recorder。
+- 当前问题回答：按主按钮或确认热键时对 activeQuestion 快照同时启动快答和深答，系统音频和麦克风继续运行。
 - 降级：系统音频起不来要明确报错 + 手动输入兜底；mic 失败不阻断系统音频。
 
 ### Task C：样式 + 验证（未做）
 - `src/renderer/src/styles.css`：`.transcript-item.interviewer` / `.transcript-item.candidate` 两套配色。
 - `npm run typecheck` 通过；`npm test`（含 App.test.tsx，可能要更新）通过。
-- 端到端：系统放面试官提问音频 → activeQuestion 累积该文本；对麦克风说话 → candidate 条目出现且不进 activeQuestion；两段式停止出快答/深答。
+- 端到端：系统放面试官提问音频 → activeQuestion 累积该文本；对麦克风说话 → candidate 条目出现且不进 activeQuestion；按主按钮或确认热键出快答/深答且继续收音。
 
 ### Task D：打包（后续，非必须）
 - electron-builder 把 audiotee 的 `bin/audiotee` 二进制 unpack 出 asar（`asarUnpack`），用 `binaryPath` 指向解包后路径。

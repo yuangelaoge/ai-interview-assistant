@@ -66,7 +66,7 @@ export const defaultConfig: AppConfig = {
   shallowDocsPath: '',
   deepContextPath: '',
   codeWorkspacePath: '',
-  confirmHotkey: 'CommandOrControl+Shift+Enter',
+  confirmHotkey: 'CommandOrControl+Enter',
   autoAnswer: false,
   screenshotHotkey: 'CommandOrControl+Shift+S',
   screenshotTripleClick: true

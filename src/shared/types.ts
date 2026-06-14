@@ -1,5 +1,5 @@
 export type ServiceStatus = 'idle' | 'listening' | 'thinking' | 'ready' | 'error';
-export type CapturePhase = 'idle' | 'collecting' | 'fastSubmitted';
+export type CapturePhase = 'idle' | 'collecting';
 export type Speaker = 'interviewer' | 'candidate';
 export type FastAnswerMode = 'zero-context' | 'context';
 export type DeepAnswerMode = 'context' | 'codebase';
