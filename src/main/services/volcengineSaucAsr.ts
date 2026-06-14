@@ -132,12 +132,11 @@ function buildFullClientRequest(config: VolcengineSaucConfig): Buffer {
           uid: 'interview-assistant'
         },
         audio: {
-          format: 'raw',
+          format: 'pcm',
           codec: 'raw',
           rate: 16000,
           bits: 16,
-          channel: 1,
-          language: 'zh-CN'
+          channel: 1
         },
         request: {
           model_name: config.modelName.trim() || 'bigmodel',
