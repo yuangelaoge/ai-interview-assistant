@@ -32,27 +32,87 @@
 - OpenAI 兼容 SDK
 - Volcengine ASR
 
-## 快速开始
+## 部署与启动
+
+### 1. 环境要求
+
+- **Node.js ≥ 20**（推荐 ≥ 22，可消除部分依赖的 engine 警告）。
+- **平台**：macOS 优先（系统音频采集、笔试截图、macOS 系统语音识别均依赖 macOS 能力）；Windows 可用网页/会议软件场景下的多数功能，但系统音频(audiotee)与 macOS 语音识别不适用。
+- **macOS 构建工具**：`npm run dev`/`build` 会用 `swiftc` 编译随应用打包的语音识别 helper，需安装 Xcode Command Line Tools：`xcode-select --install`。
+
+### 2. 安装依赖
 
 ```bash
 npm install
+```
+
+会一并安装可选原生包：`audiotee`（系统音频）、`screenshot-desktop`（截图）、`uiohook-napi`（全局三击）、`pdf-parse`（PDF 解析）。这些在代码里是动态加载 + 优雅降级——即使某个安装失败，应用仍能启动，仅对应功能不可用。
+
+### 3. 开发模式启动
+
+```bash
 npm run dev
 ```
 
-## 常用命令
+该命令依次执行：编译 macOS 语音 helper → 编译主进程(`tsc`) → 启动 Vite(`127.0.0.1:5173`) → 启动 Electron 加载开发服务。窗口会自动弹出（置顶悬浮窗）。
+
+### 4. macOS 权限（首次必看）
+
+很多功能依赖系统权限，**否则会"静默失败"**（如系统音频录到一片静音）。在 **系统设置 > 隐私与安全性** 中按需授权给“**你启动应用的终端**”（开发期）或“**打包后的应用**”：
+
+| 功能 | 需要的权限（隐私与安全性内）|
+|---|---|
+| 系统音频采集（面试官声音） | **屏幕与系统音频录制 → 「仅系统音频录制」**（不是最上面那个分区）|
+| 笔试截图 | **屏幕录制** |
+| 麦克风（候选人转写） | **麦克风** |
+| macOS 系统语音识别 | 首次使用自动弹窗授权 |
+| 全局三击触发（默认关闭）| **辅助功能** |
+
+> 提示：iTerm / VSCode / Cursor 的内置终端常常不弹"系统音频录制"授权而直接录到静音。可改用 macOS 自带「终端」运行，或在上表对应分区手动加入它们。授权后需**完全退出并重启**终端/应用。
+
+### 5. 首次配置
+
+打开窗口右上角 ⚙️ 设置面板填写：
+
+- **语音识别 provider**：默认 **火山流式 SAUC**（国内直连、人民币计费），填 `X-Api-Key`（或旧版 App Key + Access Key）即可。其它可选：OpenAI Whisper、OpenAI Realtime、macOS 系统语音、火山 LAS。
+- **快答模型 / 深答模型**：OpenAI 兼容端点 + Key + 模型名。
+- 可选：答题语言、知识库、笔试截图模型。
+
+配置保存在本机用户数据目录，不写入仓库。也可用环境变量（见下文「环境变量」）。
+
+### 6. 本地知识库（可选，Ollama）
+
+知识库需要一个 **OpenAI 兼容的 embedding 服务**。本地零成本方案用 [Ollama](https://ollama.com)：
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-npm run package
+ollama pull bge-m3      # 多语言/中文强
+ollama serve            # http://localhost:11434
 ```
 
-说明：
+设置面板「知识库」：baseURL 填 `http://localhost:11434/v1`、model 填 `bge-m3`、apiKey 留空（本地免 key）、选择放简历/资料的目录、勾选启用。
 
-- `npm run dev` 启动开发环境。
-- `npm run build` 构建 Electron 主进程和渲染进程。
-- `npm run package` 使用 electron-builder 生成本地 Windows 应用目录。
+### 7. 生产构建与打包
+
+```bash
+npm run build      # 构建主进程 + 渲染进程到 dist/
+npm run package    # electron-builder 生成本地应用目录（mac: dir / win: nsis）到 release/
+```
+
+打包配置已通过 `asarUnpack` 解包原生模块（audiotee / screenshot-desktop / uiohook-napi / pdf-parse）。正式分发 macOS 应用还需对应用做代码签名（内置二进制会继承父应用签名）与公证。
+
+### 常用命令
+
+```bash
+npm run typecheck   # 主进程 + 渲染进程类型检查
+npm test            # vitest 单元测试
+```
+
+### 故障排查
+
+- **系统音频"没反应"/全静音**：未授予「仅系统音频录制」权限（见第 4 节）。
+- **火山流式调用失败**：确认 endpoint 为 `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel`、resourceId 为 `volc.bigasr.sauc.duration`、并已在控制台开通服务。
+- **OpenAI / Realtime 连不上**：中国大陆需代理；多数"中转"不代理 Realtime 的 WebSocket。
+- **PDF 检索不到内容**：确认已安装 `pdf-parse`（`npm install`）。
 
 ## 配置方式
 
@@ -189,7 +249,7 @@ rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!release/**' 
 
 - 暂不做账号体系。
 - 暂不做云端同步。
-- 暂不做向量库。
+- 知识库为本地内存向量检索（按目录指纹缓存），暂不接入独立向量数据库。
 - ASR 效果依赖麦克风输入质量和服务商能力。
 - 火山流式 ASR 仍属于实验接入，实际可用性取决于账号开通的资源和密钥类型。
 
