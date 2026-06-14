@@ -160,8 +160,8 @@ function registerIpc(): void {
       properties: ['openFile'],
       filters: [
         {
-          name: '上下文资料',
-          extensions: ['md', 'txt']
+          name: '上下文资料(md/txt/pdf)',
+          extensions: ['md', 'txt', 'pdf']
         }
       ]
     });

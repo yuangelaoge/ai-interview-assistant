@@ -247,7 +247,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
 
           {config.fastAnswerMode === 'context' ? (
             <label className="field">
-              <span>快答上下文文件（md/txt）</span>
+              <span>快答上下文文件（md/txt/pdf）</span>
               <div className="input-with-action">
                 <input
                   value={config.shallowDocsPath}
@@ -364,7 +364,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
 
           {config.deepAnswerMode === 'context' ? (
             <label className="field">
-              <span>深答长上下文文件（md/txt）</span>
+              <span>深答长上下文文件（md/txt/pdf）</span>
               <div className="input-with-action">
                 <input
                   value={config.deepContextPath}

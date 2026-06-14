@@ -2,10 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeBaseConfig, ModelEndpointConfig } from '../../shared/types';
+import { extractPdfText } from '../utils/pdf';
 import { trimContext } from '../utils/text';
 import { embedTexts } from './openAiCompatible';
 
-const KB_EXTENSIONS = new Set(['.md', '.txt']);
+const KB_EXTENSIONS = new Set(['.md', '.txt', '.pdf']);
 const CHUNK_SIZE = 800;
 const CHUNK_OVERLAP = 120;
 const MAX_FILES = 200;
@@ -133,7 +134,11 @@ async function buildIndex(dirPath: string, embedConfig: ModelEndpointConfig): Pr
   const chunks = (
     await Promise.all(
       files.map(async (file) => {
-        const content = await fs.promises.readFile(file, 'utf8').catch(() => '');
+        const ext = path.extname(file).toLowerCase();
+        const content =
+          ext === '.pdf'
+            ? await extractPdfText(file)
+            : await fs.promises.readFile(file, 'utf8').catch(() => '');
         const source = path.relative(root, file) || path.basename(file);
         return chunkText(content, source);
       })
