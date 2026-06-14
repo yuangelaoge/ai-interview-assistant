@@ -69,5 +69,5 @@ export const defaultConfig: AppConfig = {
   confirmHotkey: 'CommandOrControl+Enter',
   autoAnswer: false,
   screenshotHotkey: 'CommandOrControl+Shift+S',
-  screenshotTripleClick: true
+  screenshotTripleClick: false
 };

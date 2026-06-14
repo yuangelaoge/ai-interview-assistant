@@ -65,8 +65,10 @@ async function listKbFiles(dirPath: string): Promise<string[]> {
   return files;
 }
 
-async function computeFingerprint(files: string[]): Promise<string> {
+async function computeFingerprint(files: string[], embeddingModel: string): Promise<string> {
   const hash = crypto.createHash('sha1');
+  // 把 embedding 模型并入指纹：换模型后向量不兼容，需自动重建索引。
+  hash.update(`model:${embeddingModel}\n`);
 
   for (const file of [...files].sort()) {
     const stat = await fs.promises.stat(file).catch(() => undefined);
@@ -130,7 +132,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 async function buildIndex(dirPath: string, embedConfig: ModelEndpointConfig): Promise<KnowledgeChunk[]> {
   const root = path.resolve(dirPath);
   const files = await listKbFiles(root);
-  const fingerprint = await computeFingerprint(files);
+  const fingerprint = await computeFingerprint(files, embedConfig.model);
   const chunks = (
     await Promise.all(
       files.map(async (file) => {
@@ -170,7 +172,7 @@ export async function retrieveKnowledge(question: string, kb: KnowledgeBaseConfi
   try {
     const root = path.resolve(kb.dirPath);
     const files = await listKbFiles(root);
-    const fingerprint = await computeFingerprint(files);
+    const fingerprint = await computeFingerprint(files, kb.embedding.model);
     const cached = indexCache.get(root);
     const chunks = cached?.fingerprint === fingerprint ? cached.chunks : await buildIndex(root, kb.embedding);
 
