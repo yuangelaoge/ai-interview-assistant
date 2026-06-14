@@ -231,7 +231,13 @@ async function fallbackAnswer(
   reason: string,
   options: DeepAnswerOptions = {}
 ): Promise<string> {
-  const lang = getConfig().answerLanguage;
+  const appConfig = getConfig();
+  const lang = appConfig.answerLanguage;
+  // 没有代码仓库时仍读知识库（如简历），否则深答会丢掉用户资料。
+  const kbContext = await retrieveKnowledge(question, appConfig.knowledgeBase, 20000);
+  const userContent = kbContext
+    ? `原因：${reason}\n\n知识库检索片段：\n${kbContext}\n\n面试官问题：${question}`
+    : `原因：${reason}\n\n面试官问题：${question}`;
 
   return streamableChatCompletion(
     config,
@@ -239,13 +245,13 @@ async function fallbackAnswer(
       {
         role: 'system',
         content:
-          '你是技术面试回答助手。请在没有代码仓库上下文时，给出谨慎、通用、可口述的回答，并明确避免虚构具体实现。' +
+          '你是技术面试回答助手。在没有代码仓库上下文时，优先依据提供的知识库片段（如简历、项目资料）作答；没有可用资料时给出谨慎、通用、可口述的回答，并明确避免虚构具体实现。' +
           '\n\n' +
           answerLanguageDirective(lang)
       },
       {
         role: 'user',
-        content: `原因：${reason}\n\n面试官问题：${question}`
+        content: userContent
       }
     ],
     {
