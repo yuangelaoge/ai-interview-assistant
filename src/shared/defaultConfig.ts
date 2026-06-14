@@ -25,11 +25,11 @@ export const defaultConfig: AppConfig = {
       region: 'cn-beijing'
     },
     volcengineSauc: {
-      endpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+      endpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel',
       apiKey: '',
       appKey: '',
       accessKey: '',
-      resourceId: 'volc.seedasr.sauc.duration',
+      resourceId: 'volc.bigasr.sauc.duration',
       modelName: 'bigmodel',
       enableNonstream: true
     }
