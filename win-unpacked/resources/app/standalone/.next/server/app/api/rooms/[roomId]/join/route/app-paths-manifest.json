@@ -1,0 +1,3 @@
+{
+  "/api/rooms/[roomId]/join/route": "app/api/rooms/[roomId]/join/route.js"
+}

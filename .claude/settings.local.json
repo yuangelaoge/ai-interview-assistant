@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(git clone *)",
+      "Bash(npx claude *)",
+      "Bash(where bash *)",
+      "Read(//c/Program Files/Git/bin/**)",
+      "Read(//c/Program Files \\(x86\\)/Git/bin/**)",
+      "Read(//c//**)",
+      "Bash(export CLAUDE_CODE_GIT_BASH_PATH=\"D:/Git/usr/bin/bash.exe\")",
+      "Read(//d/Git/bin/**)",
+      "Read(//d/Git/**)",
+      "Read(//d/Git/usr/bin/**)",
+      "Bash(export CLAUDE_CODE_GIT_BASH_PATH=\"D:/Git/bin/bash.exe\")",
+      "Bash(export CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\")"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, session, shell } from 'electron';
 import type { AppConfig } from '../shared/types';
 import { getConfig, saveConfig } from './services/configStore';
 import {
@@ -122,6 +122,40 @@ function registerIpc(): void {
   ipcMain.handle('hotkey:register', (_event, accelerator: string) => registerConfirmHotkey(accelerator));
 }
 
+function registerMediaHandlers(): void {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(['media', 'microphone', 'display-capture'].includes(String(permission)));
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return ['media', 'microphone', 'display-capture'].includes(String(permission));
+  });
+
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: 1,
+        height: 1
+      }
+    });
+    const screen = sources[0];
+
+    if (!screen) {
+      callback({});
+      return;
+    }
+
+    callback({
+      video: {
+        id: screen.id,
+        name: screen.name
+      },
+      audio: 'loopback'
+    });
+  });
+}
+
 function registerConfirmHotkey(accelerator: string): boolean {
   if (currentHotkey) {
     globalShortcut.unregister(currentHotkey);
@@ -144,14 +178,7 @@ function registerConfirmHotkey(accelerator: string): boolean {
 }
 
 app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(['media', 'microphone'].includes(String(permission)));
-  });
-
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
-    return ['media', 'microphone'].includes(String(permission));
-  });
-
+  registerMediaHandlers();
   registerIpc();
   createWindow();
   registerConfirmHotkey(getConfig().confirmHotkey);

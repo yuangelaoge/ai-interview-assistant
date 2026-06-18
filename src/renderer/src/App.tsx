@@ -18,7 +18,7 @@ import type { AnswerResult, AppConfig, RuntimeState, TranscriptSegment } from '.
 import { defaultConfig } from '../../shared/defaultConfig';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StatusPill } from './components/StatusPill';
-import { MicrophoneRecorder } from './utils/audio';
+import { AudioRecorder } from './utils/audio';
 import { isLikelyQuestion, normalizeQuestion } from './utils/question';
 
 const initialState: RuntimeState = {
@@ -40,7 +40,7 @@ export function App() {
   const [notice, setNotice] = useState('准备就绪。点击麦克风开始监听，识别到问题后按热键确认。');
   const [deepTrace, setDeepTrace] = useState<string[]>([]);
   const [micLevel, setMicLevel] = useState(0);
-  const recorderRef = useRef<MicrophoneRecorder | undefined>(undefined);
+  const recorderRef = useRef<AudioRecorder | undefined>(undefined);
   const activeQuestionRef = useRef('');
   const segmentBufferRef = useRef(new Map<number, string>());
   const nextSequenceRef = useRef(0);
@@ -341,11 +341,12 @@ export function App() {
     setNotice('正在请求麦克风权限...');
 
     try {
-      const recorder = new MicrophoneRecorder(
+      const recorder = new AudioRecorder(
         handleAudioChunk,
         setNotice,
         setNotice,
         setMicLevel,
+        latestConfig.audioCaptureSource,
         latestConfig.audioInputDeviceId
       );
       await recorder.start();
@@ -859,9 +860,9 @@ export function App() {
                   <Radio size={17} />
                   实时转写
                 </h2>
-                <p>麦克风环境音，约 1 秒低延迟识别</p>
+                <p>{config.audioCaptureSource === 'system' ? '系统音频' : '麦克风环境音'}，约 1 秒低延迟识别</p>
               </div>
-              <span className="signal" title={`麦克风电平 ${Math.round(micLevel * 100)}%`}>
+              <span className="signal" title={`音频电平 ${Math.round(micLevel * 100)}%`}>
                 {[0.18, 0.38, 0.62, 0.84].map((threshold) => (
                   <i key={threshold} className={micLevel >= threshold ? 'active' : undefined} />
                 ))}

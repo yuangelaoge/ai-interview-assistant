@@ -1,0 +1,10 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/rooms/[roomId]/battle/route.js")
+R.c("server/chunks/[root-of-the-server]__ec4fb519._.js")
+R.c("server/chunks/[root-of-the-server]__6ee8e2b9._.js")
+R.c("server/chunks/lib_56209fe7._.js")
+R.c("server/chunks/lib_game_67eb75ce._.js")
+R.c("server/chunks/lib_game_turn_ts_2bf9c21b._.js")
+R.c("server/chunks/[root-of-the-server]__6ac8ec31._.js")
+R.c("server/chunks/_next-internal_server_app_api_rooms_[roomId]_battle_route_actions_0e5e39a6.js")
+R.m(484954)
+module.exports=R.m(484954).exports

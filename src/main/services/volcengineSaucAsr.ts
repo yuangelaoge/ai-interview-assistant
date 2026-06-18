@@ -13,8 +13,7 @@ const audioOnlyRequest = 0b0010;
 const fullServerResponse = 0b1001;
 const errorResponse = 0b1111;
 const positiveSequence = 0b0001;
-const lastPacketNoSequence = 0b0010;
-const noSequence = 0b0000;
+const negativeSequence = 0b0010;
 
 interface SaucResponse {
   result?: {
@@ -49,17 +48,20 @@ export async function transcribeWithVolcengineSauc(
   const socket = await openSocket(config, requestId);
   const responses: SaucResponse[] = [];
   const collector = collectResponses(socket, responses);
+  let sequence = 1;
 
   try {
-    socket.send(buildFullClientRequest(config));
+    socket.send(buildFullClientRequest(config, sequence));
     await waitForFirstResponse(collector, 2_000);
+    sequence += 1;
 
     for (const chunk of splitBuffer(pcm, 3200)) {
-      socket.send(buildAudioOnlyRequest(chunk, false));
+      socket.send(buildAudioOnlyRequest(chunk, sequence));
+      sequence += 1;
       await wait(20);
     }
 
-    socket.send(buildAudioOnlyRequest(Buffer.alloc(0), true));
+    socket.send(buildAudioOnlyRequest(Buffer.alloc(0), -sequence));
     await waitForRecognitionResult(collector, responses);
   } finally {
     collector.stop();
@@ -93,18 +95,29 @@ function openSocket(config: VolcengineSaucConfig, requestId: string): Promise<We
 
     socket.once('unexpected-response', (_request, response) => {
       clearTimeout(timer);
-      response.resume();
-      response.destroy();
-      socket.terminate();
       const message = response.headers['x-api-message'];
       const logId = response.headers['x-tt-logid'];
-      reject(
-        new Error(
-          `火山流式 ASR 建连失败：HTTP ${response.statusCode} ${formatHeader(message) || response.statusMessage || ''}${
-            logId ? `，logid=${formatHeader(logId)}` : ''
-          }`.trim()
-        )
-      );
+      const errorCode = response.headers['x-api-error-code'];
+      const bodyChunks: Buffer[] = [];
+
+      response.on('data', (chunk) => {
+        bodyChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      response.once('end', () => {
+        socket.terminate();
+        const body = Buffer.concat(bodyChunks).toString('utf8').trim();
+        const authHint = body.includes('Invalid X-Api-Key')
+          ? '。当前填写的 X-Api-Key 被火山流式 ASR 拒绝；LAS 的 API Key 不能直接证明已开通 SAUC 流式资源，请到豆包语音/大模型流式语音识别控制台获取新版 X-Api-Key，或改填旧版 App Key + Access Key'
+          : '';
+        reject(
+          new Error(
+            `火山流式 ASR 建连失败：HTTP ${response.statusCode} ${formatHeader(message) || response.statusMessage || ''}${
+              errorCode ? `，code=${formatHeader(errorCode)}` : ''
+            }${logId ? `，logid=${formatHeader(logId)}` : ''}${body ? `，body=${body}` : ''}${authHint}`.trim()
+          )
+        );
+      });
+      response.resume();
     });
     socket.once('open', () => {
       clearTimeout(timer);
@@ -124,7 +137,7 @@ function formatHeader(value: string | string[] | number | undefined): string {
   return value ? String(value) : '';
 }
 
-function buildFullClientRequest(config: VolcengineSaucConfig): Buffer {
+function buildFullClientRequest(config: VolcengineSaucConfig, sequence: number): Buffer {
   const payload = gzipSync(
     Buffer.from(
       JSON.stringify({
@@ -152,13 +165,14 @@ function buildFullClientRequest(config: VolcengineSaucConfig): Buffer {
     )
   );
 
-  return concatFrame(buildHeader(fullClientRequest, noSequence, serializationJson, compressionGzip), payload);
+  return concatFrame(buildHeader(fullClientRequest, positiveSequence, serializationJson, compressionGzip), sequence, payload);
 }
 
-function buildAudioOnlyRequest(audio: Buffer, isLast: boolean): Buffer {
+function buildAudioOnlyRequest(audio: Buffer, sequence: number): Buffer {
   const payload = gzipSync(audio);
   return concatFrame(
-    buildHeader(audioOnlyRequest, isLast ? lastPacketNoSequence : noSequence, serializationNone, compressionGzip),
+    buildHeader(audioOnlyRequest, sequence < 0 ? negativeSequence : positiveSequence, serializationNone, compressionGzip),
+    sequence,
     payload
   );
 }
@@ -172,10 +186,12 @@ function buildHeader(messageType: number, flags: number, serialization: number, 
   ]);
 }
 
-function concatFrame(header: Buffer, payload: Buffer): Buffer {
+function concatFrame(header: Buffer, sequence: number, payload: Buffer): Buffer {
+  const sequenceBuffer = Buffer.alloc(4);
+  sequenceBuffer.writeInt32BE(sequence, 0);
   const size = Buffer.alloc(4);
   size.writeUInt32BE(payload.length, 0);
-  return Buffer.concat([header, size, payload]);
+  return Buffer.concat([header, sequenceBuffer, size, payload]);
 }
 
 function toBuffer(data: WebSocket.RawData): Buffer {

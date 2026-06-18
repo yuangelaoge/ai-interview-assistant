@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "mode": "external-render",
+  "workspace": "C:\\Users\\dell\\Desktop\\面试助手",
+  "outputDir": "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated",
+  "checkedAt": "2026-05-16T16:10:49Z",
+  "renderer": "manual external PNG supplied by user",
+  "nextSteps": [
+    "Codex writes figures/ai_generated/prompt_vN.md.",
+    "User renders externally and provides figures/ai_generated/external_render_vN.png.",
+    "Codex reviews, refines if needed, then runs finalize and verify."
+  ]
+}

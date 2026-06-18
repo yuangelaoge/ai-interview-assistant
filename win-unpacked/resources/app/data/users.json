@@ -1,0 +1,64 @@
+{
+  "users": [
+    {
+      "id": "user_1771360858632_9522",
+      "username": "admin",
+      "password": "123456",
+      "createdAt": "2026-02-17T20:40:58.632Z"
+    },
+    {
+      "id": "user_1771361118594_8536",
+      "username": "Longaadream",
+      "password": "123456",
+      "createdAt": "2026-02-17T20:45:18.594Z"
+    },
+    {
+      "id": "user_1771477288344_3135",
+      "username": "lngsctrer",
+      "password": "123456",
+      "createdAt": "2026-02-19T05:01:28.344Z"
+    },
+    {
+      "id": "user_1771484840385_7362",
+      "username": "yogdizewa",
+      "password": "w0010000",
+      "createdAt": "2026-02-19T07:07:20.385Z"
+    },
+    {
+      "id": "user_1771763839460_842",
+      "username": "Davide",
+      "password": "Liu250250,",
+      "createdAt": "2026-02-22T12:37:19.460Z"
+    },
+    {
+      "id": "user_1773017229874_9958",
+      "username": "hehehehe",
+      "password": "2786549zz",
+      "createdAt": "2026-03-09T00:47:09.875Z"
+    },
+    {
+      "id": "user_1773661647774_6091",
+      "username": "testplayer999",
+      "password": "123456",
+      "createdAt": "2026-03-16T11:47:27.774Z"
+    },
+    {
+      "id": "user_1773661889429_5170",
+      "username": "debuguser777",
+      "password": "pass123456",
+      "createdAt": "2026-03-16T11:51:29.429Z"
+    },
+    {
+      "id": "user_1773724123567_4020",
+      "username": "lmy",
+      "password": "lmy666",
+      "createdAt": "2026-03-17T05:08:43.567Z"
+    },
+    {
+      "id": "user_1773724213971_9251",
+      "username": "hhhhh",
+      "password": "2786549",
+      "createdAt": "2026-03-17T05:10:13.971Z"
+    }
+  ]
+}

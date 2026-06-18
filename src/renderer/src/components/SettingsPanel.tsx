@@ -90,10 +90,26 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             语音识别 API
           </h3>
           <label className="field">
+            <span>音频来源</span>
+            <select
+              value={config.audioCaptureSource}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  audioCaptureSource: event.target.value as AppConfig['audioCaptureSource']
+                })
+              }
+            >
+              <option value="microphone">麦克风</option>
+              <option value="system">系统音频</option>
+            </select>
+          </label>
+          <label className="field">
             <span>麦克风输入设备</span>
             <div className="input-with-action">
               <select
                 value={config.audioInputDeviceId}
+                disabled={config.audioCaptureSource === 'system'}
                 onChange={(event) =>
                   onChange({
                     ...config,
@@ -114,7 +130,9 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             </div>
           </label>
           <p className="field-help">
-            {deviceNotice || '如果系统默认麦克风没有声音，请选择“麦克风阵列”等实际有输入信号的设备。'}
+            {config.audioCaptureSource === 'system'
+              ? '系统音频会捕获电脑正在播放的声音，适合面试声音来自会议软件或浏览器时使用。Windows 下依赖 Electron loopback 捕获。'
+              : deviceNotice || '如果系统默认麦克风没有声音，请选择“麦克风阵列”等实际有输入信号的设备。'}
           </p>
           <label className="field">
             <span>provider</span>
@@ -312,11 +330,21 @@ function VolcengineSaucFields({
   return (
     <>
       <p className="field-help">
-        使用火山“大模型流式语音识别”WebSocket API。新版控制台填 X-Api-Key；Resource ID 按开通资源选择。
+        使用火山“大模型流式语音识别”WebSocket API。双向流式地址通常是 wss://openspeech.bytedance.com/api/v3/sauc/bigmodel；新版控制台填 X-Api-Key，Resource ID 按开通资源选择。
       </p>
       <label className="field">
         <span>WebSocket URL</span>
-        <input value={config.asr.volcengineSauc.endpoint} onChange={(event) => onChange({ endpoint: event.target.value })} />
+        <div className="input-with-action">
+          <input value={config.asr.volcengineSauc.endpoint} onChange={(event) => onChange({ endpoint: event.target.value })} />
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => onChange({ endpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel' })}
+            aria-label="使用双向流式地址"
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
       </label>
       <label className="field">
         <span>X-Api-Key</span>
@@ -328,17 +356,19 @@ function VolcengineSaucFields({
       </label>
       <label className="field">
         <span>Resource ID</span>
-        <input
-          value={config.asr.volcengineSauc.resourceId}
-          onChange={(event) => onChange({ resourceId: event.target.value })}
-        />
+        <select value={config.asr.volcengineSauc.resourceId} onChange={(event) => onChange({ resourceId: event.target.value })}>
+          <option value="volc.seedasr.sauc.duration">豆包流式语音识别 2.0 小时版</option>
+          <option value="volc.seedasr.sauc.concurrent">豆包流式语音识别 2.0 并发版</option>
+          <option value="volc.bigasr.sauc.duration">豆包流式语音识别 1.0 小时版</option>
+          <option value="volc.bigasr.sauc.concurrent">豆包流式语音识别 1.0 并发版</option>
+        </select>
       </label>
       <label className="field">
         <span>modelName</span>
         <input value={config.asr.volcengineSauc.modelName} onChange={(event) => onChange({ modelName: event.target.value })} />
       </label>
       <label className="field checkbox-field">
-        <span>非流式出字</span>
+        <span>启用非流式出字</span>
         <input
           checked={config.asr.volcengineSauc.enableNonstream}
           type="checkbox"

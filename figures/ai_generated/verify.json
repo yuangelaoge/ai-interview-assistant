@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "workspace": "C:\\Users\\dell\\Desktop\\面试助手",
+  "checkedAt": "2026-05-16T16:25:21Z",
+  "artifacts": {
+    "figureFinal": {
+      "path": "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated\\figure_final.png",
+      "exists": true
+    },
+    "latexInclude": {
+      "path": "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated\\latex_include.tex",
+      "exists": true
+    },
+    "reviewLog": {
+      "path": "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated\\review_log.json",
+      "exists": true
+    }
+  },
+  "errors": []
+}

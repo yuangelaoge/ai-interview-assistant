@@ -37,6 +37,7 @@ const asrSchema = z.object({
 
 const configSchema = z.object({
   asr: asrSchema,
+  audioCaptureSource: z.enum(['microphone', 'system']),
   audioInputDeviceId: z.string(),
   fastModel: endpointSchema,
   deepModel: endpointSchema,

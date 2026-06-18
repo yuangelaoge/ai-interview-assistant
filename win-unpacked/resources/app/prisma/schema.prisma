@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Room {
+  id          String   @id
+  name        String
+  status      String   @default("waiting")
+  mapId       String?
+  hostId      String?
+  visibility  String?
+  maxPlayers  Int?
+  players     String   @default("[]")
+  spectators  String   @default("[]")
+  battleState String?
+  inviteCode  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(0)
+}
+
+model GameRecord {
+  id             String   @id @default(cuid())
+  playerId       String
+  playerName     String
+  opponentId     String?
+  opponentName   String?
+  result         String   // "win" | "loss"
+  turns          Int
+  myPieces       String   // JSON: [{templateId, name}]
+  opponentPieces String   // JSON: [{templateId, name}]
+  roomId         String?
+  mapId          String?
+  createdAt      DateTime @default(now())
+}

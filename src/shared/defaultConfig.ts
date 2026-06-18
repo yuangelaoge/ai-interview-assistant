@@ -19,15 +19,16 @@ export const defaultConfig: AppConfig = {
       region: 'cn-beijing'
     },
     volcengineSauc: {
-      endpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+      endpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel',
       apiKey: '',
       appKey: '',
       accessKey: '',
       resourceId: 'volc.seedasr.sauc.duration',
       modelName: 'bigmodel',
-      enableNonstream: true
+      enableNonstream: false
     }
   },
+  audioCaptureSource: 'microphone',
   audioInputDeviceId: '',
   fastModel: {
     baseURL: 'https://api.deepseek.com',

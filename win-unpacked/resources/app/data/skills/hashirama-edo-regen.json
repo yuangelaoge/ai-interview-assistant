@@ -1,0 +1,16 @@
+{
+  "id": "hashirama-edo-regen",
+  "name": "秽土转生·自愈",
+  "description": "生命值低于50%时，每回合结束治疗1点生命，直到回到50%为止。",
+  "keywords": [],
+  "targetText": "被动",
+  "effectTags": ["治疗"],
+  "icon": "❤️",
+  "kind": "passive",
+  "type": "passive",
+  "cooldownTurns": 0,
+  "maxCharges": 0,
+  "chargeCost": 0,
+  "actionPointCost": 0,
+  "code": "function executeSkill(context) { return { success: false, message: '这是被动技能，自动触发，无法手动使用' }; }"
+}

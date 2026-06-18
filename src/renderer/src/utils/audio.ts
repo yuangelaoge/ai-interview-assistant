@@ -1,10 +1,10 @@
-import type { AudioChunkPayload } from '../../../shared/types';
+import type { AudioCaptureSource, AudioChunkPayload } from '../../../shared/types';
 
-export class MicrophoneRecorder {
+export class AudioRecorder {
   private stream?: MediaStream;
   private audioContext?: AudioContext;
   private processor?: ScriptProcessorNode;
-  private source?: MediaStreamAudioSourceNode;
+  private mediaSource?: MediaStreamAudioSourceNode;
   private buffers: Float32Array[] = [];
   private flushTimer?: number;
   private sampleRate = 16000;
@@ -16,6 +16,7 @@ export class MicrophoneRecorder {
   private readonly onState?: (message: string) => void;
   private readonly onLevel?: (level: number) => void;
   private readonly captureSessionId: string;
+  private readonly captureSource: AudioCaptureSource;
   private readonly deviceId: string;
 
   get sessionId(): string {
@@ -27,12 +28,14 @@ export class MicrophoneRecorder {
     onError: (message: string) => void,
     onState?: (message: string) => void,
     onLevel?: (level: number) => void,
+    captureSource: AudioCaptureSource = 'microphone',
     deviceId = ''
   ) {
     this.onChunk = onChunk;
     this.onError = onError;
     this.onState = onState;
     this.onLevel = onLevel;
+    this.captureSource = captureSource;
     this.deviceId = deviceId;
     this.captureSessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
@@ -43,26 +46,22 @@ export class MicrophoneRecorder {
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('当前运行环境不支持麦克风采集。请使用 Electron 桌面端运行。');
+      throw new Error('当前运行环境不支持音频采集。请使用 Electron 桌面端运行。');
     }
 
-    this.onState?.('正在请求麦克风权限...');
-
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        ...(this.deviceId ? { deviceId: { exact: this.deviceId } } : {}),
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
-    });
+    this.onState?.(this.captureSource === 'system' ? '正在请求系统音频权限...' : '正在请求麦克风权限...');
+    this.stream = this.captureSource === 'system' ? await this.openSystemAudioStream() : await this.openMicrophoneStream();
 
     const audioTracks = this.stream.getAudioTracks();
     if (audioTracks.length === 0) {
-      throw new Error('没有获取到可用的麦克风音轨。');
+      throw new Error(this.captureSource === 'system' ? '没有获取到可用的系统音频轨。' : '没有获取到可用的麦克风音轨。');
     }
 
-    this.onState?.(`麦克风已接入：${audioTracks[0].label || '默认输入设备'}`);
+    this.onState?.(
+      this.captureSource === 'system'
+        ? `系统音频已接入：${audioTracks[0].label || 'Windows loopback'}`
+        : `麦克风已接入：${audioTracks[0].label || '默认输入设备'}`
+    );
 
     try {
       this.audioContext = new AudioContext({ sampleRate: this.sampleRate });
@@ -75,11 +74,11 @@ export class MicrophoneRecorder {
     }
 
     if (this.audioContext.state !== 'running') {
-      throw new Error(`麦克风音频上下文未启动：${this.audioContext.state}`);
+      throw new Error(`音频上下文未启动：${this.audioContext.state}`);
     }
 
     this.sampleRate = this.audioContext.sampleRate;
-    this.source = this.audioContext.createMediaStreamSource(this.stream);
+    this.mediaSource = this.audioContext.createMediaStreamSource(this.stream);
     this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
     this.processor.onaudioprocess = (event) => {
@@ -96,13 +95,44 @@ export class MicrophoneRecorder {
 
       if (rms > 0.01 && now - this.lastVoiceNoticeAt > 1500) {
         this.lastVoiceNoticeAt = now;
-        this.onState?.('麦克风正在接收声音...');
+        this.onState?.(this.captureSource === 'system' ? '系统音频正在接收声音...' : '麦克风正在接收声音...');
       }
     };
 
-    this.source.connect(this.processor);
+    this.mediaSource.connect(this.processor);
     this.processor.connect(this.audioContext.destination);
     this.flushTimer = window.setInterval(() => this.flush(), 1000);
+  }
+
+  private async openMicrophoneStream(): Promise<MediaStream> {
+    return navigator.mediaDevices.getUserMedia({
+      audio: {
+        ...(this.deviceId ? { deviceId: { exact: this.deviceId } } : {}),
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+  }
+
+  private async openSystemAudioStream(): Promise<MediaStream> {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error('当前 Electron 环境不支持系统音频捕获。');
+    }
+
+    const displayStream = await navigator.mediaDevices.getDisplayMedia({
+      audio: true,
+      video: true
+    });
+    displayStream.getVideoTracks().forEach((track) => track.stop());
+    const audioTracks = displayStream.getAudioTracks();
+
+    if (audioTracks.length === 0) {
+      displayStream.getTracks().forEach((track) => track.stop());
+      throw new Error('没有获取到系统音频。请确认正在播放面试声音，且当前系统支持 loopback 捕获。');
+    }
+
+    return new MediaStream(audioTracks);
   }
 
   stop(): void {
@@ -113,14 +143,14 @@ export class MicrophoneRecorder {
     }
 
     this.processor?.disconnect();
-    this.source?.disconnect();
+    this.mediaSource?.disconnect();
     this.stream?.getTracks().forEach((track) => track.stop());
     void this.audioContext?.close().catch(() => {
       this.onError('麦克风录音关闭异常。');
     });
 
     this.processor = undefined;
-    this.source = undefined;
+    this.mediaSource = undefined;
     this.stream = undefined;
     this.audioContext = undefined;
     this.flushTimer = undefined;
@@ -149,6 +179,8 @@ export class MicrophoneRecorder {
     return sequence;
   }
 }
+
+export const MicrophoneRecorder = AudioRecorder;
 
 function mergeBuffers(buffers: Float32Array[]): Float32Array {
   const length = buffers.reduce((sum, buffer) => sum + buffer.length, 0);

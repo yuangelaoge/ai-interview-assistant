@@ -2,6 +2,7 @@ export type ServiceStatus = 'idle' | 'listening' | 'thinking' | 'ready' | 'error
 export type CapturePhase = 'idle' | 'collecting' | 'fastSubmitted';
 export type FastAnswerMode = 'zero-context' | 'context';
 export type DeepAnswerMode = 'context' | 'codebase';
+export type AudioCaptureSource = 'microphone' | 'system';
 
 export interface ModelEndpointConfig {
   baseURL: string;
@@ -41,6 +42,7 @@ export interface AsrConfig {
 
 export interface AppConfig {
   asr: AsrConfig;
+  audioCaptureSource: AudioCaptureSource;
   audioInputDeviceId: string;
   fastModel: ModelEndpointConfig;
   deepModel: ModelEndpointConfig;

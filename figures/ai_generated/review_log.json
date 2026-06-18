@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "finalizedAt": "2026-05-16T16:25:12Z",
+  "workspace": "C:\\Users\\dell\\Desktop\\面试助手",
+  "bestImage": "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated\\external_render_v1.png",
+  "finalImage": "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated\\figure_final.png",
+  "score": 9.0,
+  "reviewSummary": "Accepted smoke-test render: all modules, labels, main arrows, retrieval sub-blocks, and clarification feedback loop are present and readable.",
+  "caption": "Smoke-test pipeline illustration for a lightweight retrieval-augmented interview assistant.",
+  "label": "fig:smoke-test-interview-assistant"
+}

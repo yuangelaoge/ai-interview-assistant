@@ -1,0 +1,13 @@
+﻿{
+    "ok":  false,
+    "workspace":  "C:\\Users\\dell\\Desktop\\面试助手",
+    "outputDir":  "C:\\Users\\dell\\Desktop\\面试助手\\figures\\ai_generated",
+    "codexBin":  "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.513.3673.0_x64__2p2nqsd0c76g0\\app\\resources\\codex.exe",
+    "checkedAt":  "2026-05-16T16:06:37Z",
+    "error":  "codex CLI exists but cannot be launched from PowerShell/Python: Access is denied (WindowsApps package identity restriction).",
+    "nextSteps":  [
+                      "Install or expose a runnable codex CLI shim on PATH outside WindowsApps, or register codex-image2 MCP in an environment allowed to launch Codex app-server.",
+                      "Verify: codex debug app-server send-message-v2 ping must exit 0.",
+                      "Then rerun: python tools/paper_illustration_image2.py preflight --workspace \u003ccwd\u003e --json-out figures/ai_generated/preflight.json"
+                  ]
+}

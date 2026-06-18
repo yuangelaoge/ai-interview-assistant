@@ -1,0 +1,35 @@
+{
+  "id": "red-shishio",
+  "name": "志志雄真实",
+  "faction": "red",
+  "description": "自燃之力。以灵力燃尽己身，将一切对手化为灰烬。",
+  "rarity": "legendary",
+  "image": "shishio.jpg",
+  "stats": {
+    "maxHp": 7,
+    "attack": 4,
+    "defense": 0,
+    "moveRange": 3
+  },
+  "skills": [
+    {
+      "skillId": "shishio-combustion-passive",
+      "level": 1
+    },
+    {
+      "skillId": "shishio-flame-spirit",
+      "level": 1
+    },
+    {
+      "skillId": "shishio-infinite-blade",
+      "level": 1
+    }
+  ],
+  "rules": [
+    "rule-shishio-cooldown-once",
+    "rule-shishio-combustion",
+    "rule-shishio-kill-track",
+    "rule-shishio-no-heal"
+  ],
+  "isDefault": false
+}

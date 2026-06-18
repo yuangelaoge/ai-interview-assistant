@@ -1,0 +1,221 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/cards/[cardId]",
+      "regex": "^/api/cards/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcardId": "nxtPcardId"
+      },
+      "namedRegex": "^/api/cards/(?<nxtPcardId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/rooms/[roomId]",
+      "regex": "^/api/rooms/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtProomId": "nxtProomId"
+      },
+      "namedRegex": "^/api/rooms/(?<nxtProomId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/rooms/[roomId]/actions",
+      "regex": "^/api/rooms/([^/]+?)/actions(?:/)?$",
+      "routeKeys": {
+        "nxtProomId": "nxtProomId"
+      },
+      "namedRegex": "^/api/rooms/(?<nxtProomId>[^/]+?)/actions(?:/)?$"
+    },
+    {
+      "page": "/api/rooms/[roomId]/battle",
+      "regex": "^/api/rooms/([^/]+?)/battle(?:/)?$",
+      "routeKeys": {
+        "nxtProomId": "nxtProomId"
+      },
+      "namedRegex": "^/api/rooms/(?<nxtProomId>[^/]+?)/battle(?:/)?$"
+    },
+    {
+      "page": "/api/rooms/[roomId]/game-record",
+      "regex": "^/api/rooms/([^/]+?)/game\\-record(?:/)?$",
+      "routeKeys": {
+        "nxtProomId": "nxtProomId"
+      },
+      "namedRegex": "^/api/rooms/(?<nxtProomId>[^/]+?)/game\\-record(?:/)?$"
+    },
+    {
+      "page": "/api/rooms/[roomId]/join",
+      "regex": "^/api/rooms/([^/]+?)/join(?:/)?$",
+      "routeKeys": {
+        "nxtProomId": "nxtProomId"
+      },
+      "namedRegex": "^/api/rooms/(?<nxtProomId>[^/]+?)/join(?:/)?$"
+    },
+    {
+      "page": "/api/rooms/[roomId]/spectate",
+      "regex": "^/api/rooms/([^/]+?)/spectate(?:/)?$",
+      "routeKeys": {
+        "nxtProomId": "nxtProomId"
+      },
+      "namedRegex": "^/api/rooms/(?<nxtProomId>[^/]+?)/spectate(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api/admin/resource-pack",
+      "regex": "^/api/admin/resource\\-pack(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/resource\\-pack(?:/)?$"
+    },
+    {
+      "page": "/api/admin/resource-pack/upload",
+      "regex": "^/api/admin/resource\\-pack/upload(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/resource\\-pack/upload(?:/)?$"
+    },
+    {
+      "page": "/api/admin/rooms/cleanup",
+      "regex": "^/api/admin/rooms/cleanup(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/rooms/cleanup(?:/)?$"
+    },
+    {
+      "page": "/api/battle",
+      "regex": "^/api/battle(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/battle(?:/)?$"
+    },
+    {
+      "page": "/api/debug-battle",
+      "regex": "^/api/debug\\-battle(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/debug\\-battle(?:/)?$"
+    },
+    {
+      "page": "/api/lobby",
+      "regex": "^/api/lobby(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/lobby(?:/)?$"
+    },
+    {
+      "page": "/api/maps",
+      "regex": "^/api/maps(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/maps(?:/)?$"
+    },
+    {
+      "page": "/api/pieces",
+      "regex": "^/api/pieces(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/pieces(?:/)?$"
+    },
+    {
+      "page": "/api/ping",
+      "regex": "^/api/ping(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/ping(?:/)?$"
+    },
+    {
+      "page": "/api/pve",
+      "regex": "^/api/pve(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/pve(?:/)?$"
+    },
+    {
+      "page": "/api/records",
+      "regex": "^/api/records(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/records(?:/)?$"
+    },
+    {
+      "page": "/api/relay-battle-init",
+      "regex": "^/api/relay\\-battle\\-init(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/relay\\-battle\\-init(?:/)?$"
+    },
+    {
+      "page": "/api/rooms",
+      "regex": "^/api/rooms(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/rooms(?:/)?$"
+    },
+    {
+      "page": "/api/skills",
+      "regex": "^/api/skills(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/skills(?:/)?$"
+    },
+    {
+      "page": "/api/training",
+      "regex": "^/api/training(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/training(?:/)?$"
+    },
+    {
+      "page": "/api/tutorial",
+      "regex": "^/api/tutorial(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tutorial(?:/)?$"
+    },
+    {
+      "page": "/api/ws-info",
+      "regex": "^/api/ws\\-info(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/ws\\-info(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}
