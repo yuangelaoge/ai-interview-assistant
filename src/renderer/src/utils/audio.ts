@@ -16,6 +16,7 @@ export class MicrophoneRecorder {
   private readonly onState?: (message: string) => void;
   private readonly onLevel?: (level: number) => void;
   private readonly captureSessionId: string;
+  private readonly deviceId: string;
 
   get sessionId(): string {
     return this.captureSessionId;
@@ -25,12 +26,14 @@ export class MicrophoneRecorder {
     onChunk: (payload: AudioChunkPayload) => void,
     onError: (message: string) => void,
     onState?: (message: string) => void,
-    onLevel?: (level: number) => void
+    onLevel?: (level: number) => void,
+    deviceId = ''
   ) {
     this.onChunk = onChunk;
     this.onError = onError;
     this.onState = onState;
     this.onLevel = onLevel;
+    this.deviceId = deviceId;
     this.captureSessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
@@ -47,6 +50,7 @@ export class MicrophoneRecorder {
 
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
+        ...(this.deviceId ? { deviceId: { exact: this.deviceId } } : {}),
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true

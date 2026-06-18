@@ -28,6 +28,7 @@ export const defaultConfig: AppConfig = {
       enableNonstream: true
     }
   },
+  audioInputDeviceId: '',
   fastModel: {
     baseURL: 'https://api.deepseek.com',
     apiKey: '',
