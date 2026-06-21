@@ -5,8 +5,9 @@
   "description": "AI interview assistant MVP with Electron, React, and dual-model responses.",
   "main": "dist/main/main.js",
   "scripts": {
-    "dev": "tsc -p tsconfig.node.json && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
-    "build": "tsc -p tsconfig.node.json && vite build",
+    "build:macos-speech": "node scripts/build-macos-speech-helper.mjs",
+    "dev": "npm run build:macos-speech && tsc -p tsconfig.node.json && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "npm run build:macos-speech && tsc -p tsconfig.node.json && vite build",
     "package": "npm run build && electron-builder --dir",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -14,8 +15,12 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
+    "audiotee": "^0.0.7",
     "lucide-react": "^0.561.0",
     "openai": "^6.10.0",
+    "pdf-parse": "^1.1.1",
+    "screenshot-desktop": "^1.15.1",
+    "uiohook-napi": "^1.5.4",
     "vite": "^7.3.0",
     "ws": "^8.20.1",
     "zod": "^4.1.13"
@@ -42,10 +47,33 @@
     "productName": "AI面试助手",
     "files": [
       "dist/**/*",
+      "!dist/helpers/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/screenshot-desktop/**",
+      "node_modules/uiohook-napi/**",
+      "node_modules/audiotee/**",
+      "node_modules/pdf-parse/**"
     ],
     "directories": {
       "output": "release"
+    },
+    "extraResources": [
+      {
+        "from": "dist/helpers",
+        "to": "helpers",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": "dir",
+      "extendInfo": {
+        "NSSpeechRecognitionUsageDescription": "AI面试助手需要使用 macOS 语音识别来转写面试问题。",
+        "NSMicrophoneUsageDescription": "AI面试助手需要访问麦克风来采集面试问题。"
+      }
     },
     "win": {
       "target": "nsis"

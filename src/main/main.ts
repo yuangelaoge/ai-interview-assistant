@@ -6,11 +6,18 @@ import {
   confirmQuestion,
   generateDeepAnswerForQuestion,
   generateFastAnswer,
+  generateFastAnswerStream,
+  translateText,
   transcribeAudio
 } from './services/answerService';
+import { generateScreenshotAnswer } from './services/screenshotAnswer';
+import { startTripleClickTrigger, type GlobalTriggerHandle } from './services/globalTrigger';
+import { startSystemAudioCapture, stopSystemAudioCapture } from './services/systemAudioCapture';
 
 let mainWindow: BrowserWindow | undefined;
 let currentHotkey = '';
+let currentScreenshotHotkey = '';
+let tripleClickHandle: GlobalTriggerHandle | undefined;
 
 app.setName('ai-interview-assistant');
 
@@ -63,11 +70,36 @@ function registerIpc(): void {
   ipcMain.handle('config:save', (_event, config: AppConfig) => {
     const saved = saveConfig(config);
     registerConfirmHotkey(saved.confirmHotkey);
+    registerScreenshotHotkey(saved.screenshotHotkey);
+    applyTripleClickTrigger(saved.screenshotTripleClick);
     return saved;
   });
 
   ipcMain.handle('audio:transcribe', (_event, payload) => transcribeAudio(payload));
   ipcMain.handle('answer:fast', (_event, question: string) => generateFastAnswer(question));
+  ipcMain.handle('answer:fast-stream', async (event, requestId: string, question: string) => {
+    try {
+      const text = await generateFastAnswerStream(question, (delta) => {
+        event.sender.send('answer:fast-stream-chunk', {
+          requestId,
+          delta
+        });
+      });
+
+      event.sender.send('answer:fast-stream-chunk', {
+        requestId,
+        text,
+        done: true
+      });
+    } catch (error) {
+      event.sender.send('answer:fast-stream-chunk', {
+        requestId,
+        error: error instanceof Error ? error.message : '快答生成失败。',
+        done: true
+      });
+    }
+  });
+  ipcMain.handle('answer:translate', (_event, text: string) => translateText(text));
   ipcMain.handle('answer:deep', (_event, question: string) => generateDeepAnswerForQuestion(question));
   ipcMain.handle('answer:deep-stream', async (event, requestId: string, question: string) => {
     try {
@@ -95,6 +127,47 @@ function registerIpc(): void {
   });
   ipcMain.handle('answer:confirm-question', (_event, question: string) => confirmQuestion(question));
 
+  ipcMain.handle('screenshot:answer-stream', async (event, requestId: string) => {
+    try {
+      await generateScreenshotAnswer({
+        onDelta: (delta) => {
+          event.sender.send('screenshot:answer-chunk', {
+            requestId,
+            delta
+          });
+        }
+      });
+
+      event.sender.send('screenshot:answer-chunk', {
+        requestId,
+        done: true
+      });
+    } catch (error) {
+      event.sender.send('screenshot:answer-chunk', {
+        requestId,
+        error: error instanceof Error ? error.message : '截图答题生成失败。',
+        done: true
+      });
+    }
+  });
+
+  ipcMain.handle('system-audio:start', async (event, sessionId: string) => {
+    try {
+      await startSystemAudioCapture(sessionId, {
+        onTranscript: (transcript) => event.sender.send('system-audio:transcript', transcript),
+        onStatus: (status) => event.sender.send('system-audio:status', status)
+      });
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : '系统音频采集启动失败。'
+      };
+    }
+  });
+
+  ipcMain.handle('system-audio:stop', () => stopSystemAudioCapture());
+
   ipcMain.handle('dialog:select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: '选择目录',
@@ -110,8 +183,8 @@ function registerIpc(): void {
       properties: ['openFile'],
       filters: [
         {
-          name: '上下文资料',
-          extensions: ['md', 'txt']
+          name: '上下文资料(md/txt/pdf)',
+          extensions: ['md', 'txt', 'pdf']
         }
       ]
     });
@@ -143,6 +216,38 @@ function registerConfirmHotkey(accelerator: string): boolean {
   return ok;
 }
 
+function registerScreenshotHotkey(accelerator: string): boolean {
+  if (currentScreenshotHotkey) {
+    globalShortcut.unregister(currentScreenshotHotkey);
+    currentScreenshotHotkey = '';
+  }
+
+  if (!accelerator.trim()) {
+    return false;
+  }
+
+  const ok = globalShortcut.register(accelerator, () => {
+    mainWindow?.webContents.send('screenshot:hotkey');
+  });
+
+  if (ok) {
+    currentScreenshotHotkey = accelerator;
+  }
+
+  return ok;
+}
+
+function applyTripleClickTrigger(enabled: boolean): void {
+  tripleClickHandle?.stop();
+  tripleClickHandle = undefined;
+
+  if (enabled) {
+    tripleClickHandle = startTripleClickTrigger(() => {
+      mainWindow?.webContents.send('screenshot:hotkey');
+    });
+  }
+}
+
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(['media', 'microphone'].includes(String(permission)));
@@ -154,7 +259,10 @@ app.whenReady().then(() => {
 
   registerIpc();
   createWindow();
-  registerConfirmHotkey(getConfig().confirmHotkey);
+  const config = getConfig();
+  registerConfirmHotkey(config.confirmHotkey);
+  registerScreenshotHotkey(config.screenshotHotkey);
+  applyTripleClickTrigger(config.screenshotTripleClick);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -170,5 +278,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  tripleClickHandle?.stop();
   globalShortcut.unregisterAll();
+  void stopSystemAudioCapture();
 });

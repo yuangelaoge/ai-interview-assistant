@@ -117,6 +117,29 @@ button {
   -webkit-app-region: no-drag;
 }
 
+.language-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(174, 205, 211, 0.15);
+  border-radius: 7px;
+  color: #d8e4e8;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.language-select select {
+  max-width: 104px;
+  border: 0;
+  outline: none;
+  color: #edf5f7;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color-scheme: dark;
+}
+
 .primary-button,
 .danger-button,
 .icon-button,
@@ -156,6 +179,19 @@ button {
   color: #d8e4e8;
   border: 1px solid rgba(174, 205, 211, 0.15);
   background: rgba(255, 255, 255, 0.055);
+}
+
+.icon-button.auto-answer-toggle {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.icon-button.active {
+  color: #102027;
+  border-color: rgba(100, 220, 203, 0.55);
+  background: #64dccb;
 }
 
 .ghost-button {
@@ -217,12 +253,13 @@ button {
 
 .answer-stack {
   display: grid;
-  grid-template-rows: minmax(178px, 0.64fr) minmax(270px, 1fr);
+  grid-template-rows: minmax(150px, 0.55fr) minmax(220px, 0.9fr) minmax(180px, 0.72fr);
   gap: 12px;
 }
 
 .fast-panel,
-.deep-panel {
+.deep-panel,
+.screenshot-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -312,8 +349,22 @@ button {
   line-height: 1.48;
 }
 
+.question-actions {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  min-width: 96px;
+}
+
+.question-actions .primary-button,
+.question-actions .ghost-button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .manual-question textarea:focus,
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: rgba(100, 220, 203, 0.7);
   box-shadow: 0 0 0 3px rgba(100, 220, 203, 0.12);
 }
@@ -344,6 +395,31 @@ button {
   font-weight: 620;
 }
 
+.translation-box {
+  margin: 8px 14px 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(100, 220, 203, 0.24);
+  border-radius: 8px;
+  background: rgba(100, 220, 203, 0.07);
+}
+
+.translation-box span {
+  display: block;
+  margin-bottom: 6px;
+  color: #7fe6d4;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.translation-box p {
+  margin: 0;
+  color: #dce8eb;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .transcript-list {
   min-height: 0;
   flex: 1;
@@ -356,15 +432,52 @@ button {
   border-bottom: 1px solid rgba(174, 205, 211, 0.1);
 }
 
-.transcript-item.hot {
+.transcript-item.interviewer {
   padding: 10px;
-  border: 1px solid rgba(100, 220, 203, 0.24);
+  border-left: 2px solid rgba(120, 170, 255, 0.5);
   border-radius: 8px;
-  background: rgba(100, 220, 203, 0.07);
+  background: rgba(120, 170, 255, 0.07);
+}
+
+.transcript-item.candidate {
+  padding: 10px;
+  border-left: 2px solid rgba(100, 220, 203, 0.45);
+  border-radius: 8px;
+  background: rgba(100, 220, 203, 0.06);
+}
+
+.transcript-item.interviewer.hot {
+  border: 1px solid rgba(120, 170, 255, 0.45);
+  border-left: 2px solid rgba(120, 170, 255, 0.7);
+  background: rgba(120, 170, 255, 0.12);
 }
 
 .transcript-item + .transcript-item {
   margin-top: 8px;
+}
+
+.transcript-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speaker-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.transcript-item.interviewer .speaker-tag {
+  color: #a9c6ff;
+  background: rgba(120, 170, 255, 0.16);
+}
+
+.transcript-item.candidate .speaker-tag {
+  color: #7fe6d4;
+  background: rgba(100, 220, 203, 0.16);
 }
 
 .transcript-item time,
@@ -454,6 +567,20 @@ button {
   color: #dce8eb;
   font-size: 14px;
   line-height: 1.74;
+}
+
+.screenshot-answer pre,
+.screenshot-answer p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.screenshot-answer pre {
+  color: #dce8eb;
+  font-size: 13px;
+  line-height: 1.68;
+  font-family: inherit;
 }
 
 .placeholder {
@@ -689,7 +816,11 @@ button {
   .window-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
-    max-width: 185px;
+    max-width: 230px;
+  }
+
+  .language-select {
+    max-width: 126px;
   }
 
   .window-actions .primary-button,
@@ -717,7 +848,7 @@ button {
 
   .answer-stack {
     flex: 0 0 auto;
-    grid-template-rows: minmax(170px, auto) minmax(280px, auto);
+    grid-template-rows: minmax(170px, auto) minmax(280px, auto) minmax(220px, auto);
   }
 
   .status-rail {

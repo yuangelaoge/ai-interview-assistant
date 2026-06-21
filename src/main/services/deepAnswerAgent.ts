@@ -3,7 +3,10 @@ import path from 'node:path';
 import type { DeepAgentTraceStep, DeepAnswerResult, ModelEndpointConfig } from '../../shared/types';
 import { chatCompletion, streamChatCompletion } from './openAiCompatible';
 import { trimContext } from '../utils/text';
+import { answerLanguageDirective } from '../utils/language';
+import { getConfig } from './configStore';
 import { loadDeepContext } from './shallowContext';
+import { retrieveKnowledge } from './knowledgeBase';
 
 const IGNORE_DIRS = new Set([
   '.git',
@@ -61,15 +64,21 @@ export async function generateDeepContextAnswer(
   options: DeepAnswerOptions = {}
 ): Promise<DeepAnswerResult> {
   const context = await loadDeepContext(contextPath, 256000);
+  const appConfig = getConfig();
+  const lang = appConfig.answerLanguage;
+  const kbContext = await retrieveKnowledge(question, appConfig.knowledgeBase, 20000);
+  const fullContext = kbContext ? `【知识库检索片段】\n${kbContext}\n\n${context}` : context;
   const messages = [
     {
       role: 'system' as const,
       content:
-        '你是资深技术面试陪练助手。当前使用深答上下文模式，不读取代码仓库，只基于用户提供的长上下文资料和面试官问题生成完整回答。输出中文，结构清晰，包含回答主线、关键技术细节、项目案例表达、可追问延展。不要编造上下文里没有的具体事实；资料不足时给出保守但可口述的表达。'
+        '你是资深技术面试陪练助手。当前使用深答上下文模式，不读取代码仓库，只基于用户提供的长上下文资料和面试官问题生成完整回答。输出时结构清晰，包含回答主线、关键技术细节、项目案例表达、可追问延展。不要编造上下文里没有的具体事实；资料不足时给出保守但可口述的表达。' +
+        '\n\n' +
+        answerLanguageDirective(lang)
     },
     {
       role: 'user' as const,
-      content: `面试官问题：\n${question}\n\n深答长上下文资料（最多约 256k 字符）：\n${context}`
+      content: `面试官问题：\n${question}\n\n深答长上下文资料（最多约 256k 字符）：\n${fullContext}`
     }
   ];
   const answer = await streamableChatCompletion(
@@ -106,6 +115,8 @@ export async function generateDeepAnswer(
   options: DeepAnswerOptions = {}
 ): Promise<DeepAnswerResult> {
   const trace: DeepAgentTraceStep[] = [];
+  const appConfig = getConfig();
+  const lang = appConfig.answerLanguage;
 
   if (!workspacePath.trim()) {
     const answer = await fallbackAnswer(config, question, '用户尚未配置代码仓库目录。', options);
@@ -167,15 +178,19 @@ export async function generateDeepAnswer(
   );
 
   const repositoryContext = trimContext(snippets.filter(Boolean).join('\n\n'), 32000);
+  const kbContext = await retrieveKnowledge(question, appConfig.knowledgeBase, 20000);
+  const fullRepositoryContext = kbContext ? `【知识库检索片段】\n${kbContext}\n\n${repositoryContext}` : repositoryContext;
   const messages = [
     {
       role: 'system' as const,
       content:
-        '你是资深技术面试陪练助手。你会基于代码仓库上下文，帮助候选人用口语化但专业的方式回答面试官问题。输出中文，结构清晰，包含回答主线、技术细节、项目案例、可追问延展。不要编造未在上下文中出现的具体事实；不确定时说明可以保守表述。'
+        '你是资深技术面试陪练助手。你会基于代码仓库上下文，帮助候选人用口语化但专业的方式回答面试官问题。输出时结构清晰，包含回答主线、技术细节、项目案例、可追问延展。不要编造未在上下文中出现的具体事实；不确定时说明可以保守表述。' +
+        '\n\n' +
+        answerLanguageDirective(lang)
     },
     {
       role: 'user' as const,
-      content: `面试官问题：\n${question}\n\n代码仓库相关上下文：\n${repositoryContext}`
+      content: `面试官问题：\n${question}\n\n代码仓库相关上下文：\n${fullRepositoryContext}`
     }
   ];
   const answer = await streamableChatCompletion(
@@ -216,17 +231,27 @@ async function fallbackAnswer(
   reason: string,
   options: DeepAnswerOptions = {}
 ): Promise<string> {
+  const appConfig = getConfig();
+  const lang = appConfig.answerLanguage;
+  // 没有代码仓库时仍读知识库（如简历），否则深答会丢掉用户资料。
+  const kbContext = await retrieveKnowledge(question, appConfig.knowledgeBase, 20000);
+  const userContent = kbContext
+    ? `原因：${reason}\n\n知识库检索片段：\n${kbContext}\n\n面试官问题：${question}`
+    : `原因：${reason}\n\n面试官问题：${question}`;
+
   return streamableChatCompletion(
     config,
     [
       {
         role: 'system',
         content:
-          '你是技术面试回答助手。请在没有代码仓库上下文时，给出谨慎、通用、可口述的中文回答，并明确避免虚构具体实现。'
+          '你是技术面试回答助手。在没有代码仓库上下文时，优先依据提供的知识库片段（如简历、项目资料）作答；没有可用资料时给出谨慎、通用、可口述的回答，并明确避免虚构具体实现。' +
+          '\n\n' +
+          answerLanguageDirective(lang)
       },
       {
         role: 'user',
-        content: `原因：${reason}\n\n面试官问题：${question}`
+        content: userContent
       }
     ],
     {

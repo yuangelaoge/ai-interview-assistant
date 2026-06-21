@@ -20,6 +20,13 @@ if (!window.interviewAssistant) {
     generateFastAnswer: async () => {
       throw new Error('未连接 Electron 主进程，无法生成快答。');
     },
+    generateFastAnswerStream: async () => {
+      throw new Error('未连接 Electron 主进程，无法生成流式快答。');
+    },
+    onFastAnswerStream: () => () => undefined,
+    translateQuestion: async () => {
+      throw new Error('未连接 Electron 主进程，无法翻译问题。');
+    },
     generateDeepAnswer: async () => {
       throw new Error('未连接 Electron 主进程，无法生成深答。');
     },
@@ -27,6 +34,17 @@ if (!window.interviewAssistant) {
       throw new Error('未连接 Electron 主进程，无法生成流式深答。');
     },
     onDeepAnswerStream: () => () => undefined,
+    captureAndAnswerScreenshot: async () => {
+      throw new Error('未连接 Electron 主进程，无法截图答题。');
+    },
+    onScreenshotAnswerStream: () => () => undefined,
+    onScreenshotHotkey: () => () => undefined,
+    startSystemAudio: async () => {
+      throw new Error('未连接 Electron 主进程，无法采集系统音频。');
+    },
+    stopSystemAudio: async () => undefined,
+    onSystemAudioTranscript: () => () => undefined,
+    onSystemAudioStatus: () => () => undefined,
     selectDirectory: async () => undefined,
     selectFiles: async () => undefined,
     registerHotkey: async () => false,

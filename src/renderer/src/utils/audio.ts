@@ -11,6 +11,7 @@ export class MicrophoneRecorder {
   private lastLevelAt = 0;
   private lastVoiceNoticeAt = 0;
   private sequence = 0;
+  private readonly flushIntervalMs: number;
   private readonly onChunk: (payload: AudioChunkPayload) => void;
   private readonly onError: (message: string) => void;
   private readonly onState?: (message: string) => void;
@@ -102,7 +103,7 @@ export class MicrophoneRecorder {
 
     this.source.connect(this.processor);
     this.processor.connect(this.audioContext.destination);
-    this.flushTimer = window.setInterval(() => this.flush(), 1000);
+    this.flushTimer = window.setInterval(() => this.flush(), this.flushIntervalMs);
   }
 
   stop(): void {

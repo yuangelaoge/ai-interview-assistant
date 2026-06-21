@@ -12,8 +12,10 @@ const endpointSchema = z.object({
 });
 
 const asrSchema = z.object({
-  provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream']),
+  provider: z.enum(['openai-compatible', 'volcengine-auc-flash', 'volcengine-sauc-stream', 'macos-speech', 'openai-realtime']),
+  language: z.string(),
   openai: endpointSchema,
+  openaiRealtime: endpointSchema,
   volcengine: z.object({
     endpoint: z.string(),
     apiKey: z.string(),
@@ -35,17 +37,31 @@ const asrSchema = z.object({
   })
 });
 
+const knowledgeBaseSchema = z.object({
+  enabled: z.boolean(),
+  dirPath: z.string(),
+  embedding: endpointSchema,
+  topK: z.number()
+});
+
 const configSchema = z.object({
   asr: asrSchema,
   audioInputDeviceId: z.string(),
   fastModel: endpointSchema,
   deepModel: endpointSchema,
+  screenshotModel: endpointSchema,
+  knowledgeBase: knowledgeBaseSchema,
   fastAnswerMode: z.enum(['zero-context', 'context']),
   deepAnswerMode: z.enum(['context', 'codebase']),
+  screenshotMode: z.enum(['general', 'acm']),
+  answerLanguage: z.enum(['auto', 'zh', 'en', 'ja', 'ko']),
   shallowDocsPath: z.string(),
   deepContextPath: z.string(),
   codeWorkspacePath: z.string(),
-  confirmHotkey: z.string()
+  confirmHotkey: z.string(),
+  autoAnswer: z.boolean(),
+  screenshotHotkey: z.string(),
+  screenshotTripleClick: z.boolean()
 });
 
 const configFileName = 'interview-assistant-config.json';
@@ -62,12 +78,22 @@ export function getConfig(): AppConfig {
     asr: {
       ...defaultConfig.asr,
       ...stored.asr,
+      provider: stored.asr?.provider ?? defaultConfig.asr.provider,
+      language: stored.asr?.language ?? defaultConfig.asr.language,
       openai: withEndpointEnv(
         { ...defaultConfig.asr.openai, ...stored.asr?.openai },
         {
           baseURL: 'AI_INTERVIEW_ASR_OPENAI_BASE_URL',
           apiKey: 'AI_INTERVIEW_ASR_OPENAI_API_KEY',
           model: 'AI_INTERVIEW_ASR_OPENAI_MODEL'
+        }
+      ),
+      openaiRealtime: withEndpointEnv(
+        { ...defaultConfig.asr.openaiRealtime, ...stored.asr?.openaiRealtime },
+        {
+          baseURL: 'AI_INTERVIEW_OPENAI_REALTIME_BASE_URL',
+          apiKey: 'AI_INTERVIEW_OPENAI_REALTIME_API_KEY',
+          model: 'AI_INTERVIEW_OPENAI_REALTIME_MODEL'
         }
       ),
       volcengine: {
@@ -121,7 +147,35 @@ export function getConfig(): AppConfig {
         apiKey: 'AI_INTERVIEW_DEEP_MODEL_API_KEY',
         model: 'AI_INTERVIEW_DEEP_MODEL_NAME'
       }
-    )
+    ),
+    screenshotModel: withEndpointEnv(
+      { ...defaultConfig.screenshotModel, ...stored.screenshotModel },
+      {
+        baseURL: 'AI_INTERVIEW_SCREENSHOT_MODEL_BASE_URL',
+        apiKey: 'AI_INTERVIEW_SCREENSHOT_MODEL_API_KEY',
+        model: 'AI_INTERVIEW_SCREENSHOT_MODEL_NAME'
+      }
+    ),
+    knowledgeBase: {
+      ...defaultConfig.knowledgeBase,
+      ...stored.knowledgeBase,
+      enabled: stored.knowledgeBase?.enabled ?? defaultConfig.knowledgeBase.enabled,
+      dirPath: stored.knowledgeBase?.dirPath ?? defaultConfig.knowledgeBase.dirPath,
+      topK: stored.knowledgeBase?.topK ?? defaultConfig.knowledgeBase.topK,
+      embedding: withEndpointEnv(
+        { ...defaultConfig.knowledgeBase.embedding, ...stored.knowledgeBase?.embedding },
+        {
+          baseURL: 'AI_INTERVIEW_EMBEDDING_BASE_URL',
+          apiKey: 'AI_INTERVIEW_EMBEDDING_API_KEY',
+          model: 'AI_INTERVIEW_EMBEDDING_MODEL'
+        }
+      )
+    },
+    screenshotMode: stored.screenshotMode ?? defaultConfig.screenshotMode,
+    answerLanguage: stored.answerLanguage ?? defaultConfig.answerLanguage,
+    autoAnswer: stored.autoAnswer ?? defaultConfig.autoAnswer,
+    screenshotHotkey: stored.screenshotHotkey || defaultConfig.screenshotHotkey,
+    screenshotTripleClick: stored.screenshotTripleClick ?? defaultConfig.screenshotTripleClick
   };
 
   return configSchema.parse(current);

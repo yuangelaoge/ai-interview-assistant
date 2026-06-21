@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bot,
   Braces,
+  Camera,
   Check,
   ClipboardList,
   Code2,
-  Flag,
+  Languages,
   Mic,
-  MicOff,
   PanelTopClose,
   Radio,
   Send,
   Settings,
-  Sparkles
+  Sparkles,
+  Zap
 } from 'lucide-react';
-import type { AnswerResult, AppConfig, RuntimeState, TranscriptSegment } from '../../shared/types';
+import type { AnswerLanguage, AppConfig, RuntimeState, TranscriptSegment } from '../../shared/types';
+import type { ServiceStatus } from '../../shared/types';
 import { defaultConfig } from '../../shared/defaultConfig';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StatusPill } from './components/StatusPill';
@@ -33,26 +35,44 @@ const initialState: RuntimeState = {
   }
 };
 
+const AUTO_ANSWER_SILENCE_MS = 1600;
+
 export function App() {
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [state, setState] = useState<RuntimeState>(initialState);
   const [showSettings, setShowSettings] = useState(false);
-  const [notice, setNotice] = useState('准备就绪。点击麦克风开始监听，识别到问题后按热键确认。');
+  const [notice, setNotice] = useState('准备就绪。点击开始收题：系统音频作为面试官问题入口，麦克风转写候选人回答。');
   const [deepTrace, setDeepTrace] = useState<string[]>([]);
+  const [screenshotAnswer, setScreenshotAnswer] = useState('');
+  const [screenshotStatus, setScreenshotStatus] = useState<ServiceStatus>('idle');
+  const [screenshotError, setScreenshotError] = useState<string | undefined>();
   const [micLevel, setMicLevel] = useState(0);
+  const [questionTranslation, setQuestionTranslation] = useState('');
+  const [translating, setTranslating] = useState(false);
   const recorderRef = useRef<MicrophoneRecorder | undefined>(undefined);
   const activeQuestionRef = useRef('');
-  const segmentBufferRef = useRef(new Map<number, string>());
-  const nextSequenceRef = useRef(0);
-  const fallbackSequenceRef = useRef(0);
+  // 系统音频会话（面试官问题入口，顺序由主进程保证）
   const captureSessionIdRef = useRef('');
-  const pendingTranscriptionsRef = useRef(0);
-  const waitForTranscriptionsRef = useRef<(() => void)[]>([]);
+  // 麦克风会话（候选人回答，仅显示，不进 activeQuestion）
+  const micSessionIdRef = useRef('');
   const stateRef = useRef(initialState);
-  const completedSequencesRef = useRef(new Set<number>());
-  const waitForSequenceRef = useRef(new Map<number, Array<() => void>>());
   const fastRequestRef = useRef('');
+  const fastAnswerIdRef = useRef('');
   const deepRequestRef = useRef('');
+  const screenshotRequestRef = useRef('');
+  const silenceTimerRef = useRef<number | undefined>(undefined);
+  const autoAnswerRef = useRef(false);
+  const lastSystemTranscriptAtRef = useRef(0);
+  const scheduleSilenceTriggerRef = useRef<(() => void) | undefined>(undefined);
+
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current === undefined) {
+      return;
+    }
+
+    window.clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = undefined;
+  }, []);
 
   useEffect(() => {
     window.interviewAssistant
@@ -74,6 +94,13 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    autoAnswerRef.current = config.autoAnswer;
+    if (!config.autoAnswer) {
+      clearSilenceTimer();
+    }
+  }, [clearSilenceTimer, config.autoAnswer]);
+
+  useEffect(() => {
     activeQuestionRef.current = state.activeQuestion;
     stateRef.current = state;
   }, [state.activeQuestion]);
@@ -82,213 +109,58 @@ export function App() {
     stateRef.current = state;
   }, [state]);
 
-  const handleAudioChunk = useCallback(async (payload: Parameters<typeof window.interviewAssistant.transcribeAudio>[0]) => {
-    const sessionId = payload.captureSessionId ?? captureSessionIdRef.current;
-    if (sessionId !== captureSessionIdRef.current || stateRef.current.capturePhase === 'idle') {
+  // 麦克风（候选人）：转写后仅作为 candidate 条目显示，绝不触碰 activeQuestion / 收题状态机。
+  const handleMicChunk = useCallback(async (payload: Parameters<typeof window.interviewAssistant.transcribeAudio>[0]) => {
+    const sessionId = payload.captureSessionId;
+    if (!sessionId || sessionId !== micSessionIdRef.current) {
       return;
     }
 
-    pendingTranscriptionsRef.current += 1;
-    setState((current) => ({
-      ...current,
-      statuses: {
-        ...current.statuses,
-        asr: 'thinking'
-      }
-    }));
-
     try {
-      const result = await window.interviewAssistant.transcribeAudio(payload);
-      if (sessionId !== captureSessionIdRef.current || !captureSessionIdRef.current) {
+      const result = await window.interviewAssistant.transcribeAudio({ ...payload, speaker: 'candidate' });
+      if (sessionId !== micSessionIdRef.current) {
         return;
       }
 
       const text = normalizeQuestion(result.text);
-      markSequenceComplete(payload.sequence, text);
-
       if (!text) {
-        setState((current) => ({
-          ...current,
-          statuses: {
-            ...current.statuses,
-            asr: current.isListening ? 'listening' : 'idle'
-          }
-        }));
         return;
       }
 
       const segment: TranscriptSegment = {
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: `mic-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         text,
         timestamp: result.timestamp,
         confidence: result.confidence,
-        isCandidateQuestion: isLikelyQuestion(text),
-        sequence: payload.sequence
+        isCandidateQuestion: false,
+        speaker: 'candidate'
       };
 
       setState((current) => ({
         ...current,
-        transcript: [segment, ...current.transcript].slice(0, 14),
-        statuses: {
-          ...current.statuses,
-          asr: current.isListening ? 'listening' : 'ready'
-        }
+        transcript: [segment, ...current.transcript].slice(0, 14)
       }));
-    } catch (error) {
-      if (sessionId !== captureSessionIdRef.current) {
-        return;
-      }
-
-      markSequenceComplete(payload.sequence, '');
-      const message = error instanceof Error ? error.message : '语音识别失败。';
-      setNotice(`本段语音识别失败，已跳过：${message}`);
-      setState((current) => ({
-        ...current,
-        statuses: {
-          ...current.statuses,
-          asr: current.isListening ? 'listening' : 'idle'
-        }
-      }));
-    } finally {
-      pendingTranscriptionsRef.current = Math.max(0, pendingTranscriptionsRef.current - 1);
-      if (pendingTranscriptionsRef.current === 0) {
-        const waiters = waitForTranscriptionsRef.current.splice(0);
-        waiters.forEach((resolve) => resolve());
-      }
+    } catch {
+      // 麦克风转写失败静默跳过，不阻断系统音频这一问题入口。
     }
   }, []);
 
-  function markSequenceComplete(sequence: number | undefined, text: string): void {
-    if (sequence === undefined) {
-      return;
-    }
-
-    segmentBufferRef.current.set(sequence, text);
-    completedSequencesRef.current.add(sequence);
-    const sequenceWaiters = waitForSequenceRef.current.get(sequence);
-    if (sequenceWaiters) {
-      waitForSequenceRef.current.delete(sequence);
-      sequenceWaiters.forEach((resolve) => resolve());
-    }
-    flushOrderedTranscript();
-  }
-
-  function flushOrderedTranscript(): void {
-    const orderedTexts: string[] = [];
-    while (segmentBufferRef.current.has(nextSequenceRef.current)) {
-      const nextText = segmentBufferRef.current.get(nextSequenceRef.current);
-      segmentBufferRef.current.delete(nextSequenceRef.current);
-      nextSequenceRef.current += 1;
-
-      if (nextText) {
-        orderedTexts.push(nextText);
-      }
-    }
-
-    if (orderedTexts.length === 0) {
-      return;
-    }
-
-    setState((current) => {
-      if (current.capturePhase === 'idle') {
-        return current;
-      }
-
-      const merged = mergeQuestionText(current.activeQuestion, orderedTexts.join(''));
-      activeQuestionRef.current = merged;
-      return {
-        ...current,
-        activeQuestion: merged
-      };
-    });
-  }
-
-  function waitForPendingTranscriptions(timeoutMs = 2500): Promise<void> {
-    if (pendingTranscriptionsRef.current === 0) {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-      const timer = window.setTimeout(() => {
-        waitForTranscriptionsRef.current = waitForTranscriptionsRef.current.filter((waiter) => waiter !== done);
-        resolve();
-      }, timeoutMs);
-
-      const done = () => {
-        window.clearTimeout(timer);
-        resolve();
-      };
-      waitForTranscriptionsRef.current.push(done);
-    });
-  }
-
-  function waitForSequence(sequence: number | undefined, timeoutMs = 4000): Promise<void> {
-    if (sequence === undefined || completedSequencesRef.current.has(sequence)) {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-      const timer = window.setTimeout(() => {
-        const waiters = waitForSequenceRef.current.get(sequence)?.filter((waiter) => waiter !== done) ?? [];
-        if (waiters.length > 0) {
-          waitForSequenceRef.current.set(sequence, waiters);
-        } else {
-          waitForSequenceRef.current.delete(sequence);
-        }
-        resolve();
-      }, timeoutMs);
-
-      const done = () => {
-        window.clearTimeout(timer);
-        resolve();
-      };
-      const waiters = waitForSequenceRef.current.get(sequence) ?? [];
-      waiters.push(done);
-      waitForSequenceRef.current.set(sequence, waiters);
-    });
-  }
-
-  async function flushAndWaitForRecorder(timeoutMs = 4000): Promise<void> {
-    const sequence = recorderRef.current?.flush();
-    await waitForSequenceFlushed(sequence, timeoutMs);
-    await waitForPendingTranscriptions(Math.min(timeoutMs, 2500));
-  }
-
-  async function waitForSequenceFlushed(sequence: number | undefined, timeoutMs = 4000): Promise<void> {
-    if (sequence === undefined || nextSequenceRef.current > sequence) {
-      return;
-    }
-
-    const startedAt = Date.now();
-    await waitForSequence(sequence, timeoutMs);
-    while (nextSequenceRef.current <= sequence && Date.now() - startedAt < timeoutMs) {
-      await wait(40);
-    }
-  }
-
-  function wait(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
-  }
-
   const resetQuestionCapture = useCallback(() => {
+    clearSilenceTimer();
+    void window.interviewAssistant.stopSystemAudio();
     activeQuestionRef.current = '';
+    lastSystemTranscriptAtRef.current = 0;
     captureSessionIdRef.current = '';
-    segmentBufferRef.current.clear();
-    nextSequenceRef.current = 0;
-    fallbackSequenceRef.current = 0;
-    completedSequencesRef.current.clear();
-    waitForSequenceRef.current.forEach((waiters) => waiters.forEach((resolve) => resolve()));
-    waitForSequenceRef.current.clear();
+    micSessionIdRef.current = '';
     fastRequestRef.current = '';
+    fastAnswerIdRef.current = '';
     deepRequestRef.current = '';
-    pendingTranscriptionsRef.current = 0;
-    waitForTranscriptionsRef.current.splice(0).forEach((resolve) => resolve());
     recorderRef.current?.stop();
     recorderRef.current = undefined;
     setMicLevel(0);
     setDeepTrace([]);
+    setQuestionTranslation('');
+    setTranslating(false);
     setState((current) => ({
       ...current,
       isListening: false,
@@ -297,14 +169,15 @@ export function App() {
       currentAnswer: undefined,
       statuses: {
         ...current.statuses,
+        asr: 'idle',
         fastModel: 'idle',
         deepAgent: 'idle'
       }
     }));
-  }, []);
+  }, [clearSilenceTimer]);
 
   const startListening = useCallback(async () => {
-    if (recorderRef.current || stateRef.current.isListening) {
+    if (stateRef.current.isListening) {
       return;
     }
 
@@ -338,7 +211,9 @@ export function App() {
         asr: 'thinking'
       }
     }));
-    setNotice('正在请求麦克风权限...');
+    setNotice('正在启动系统音频采集（面试官问题入口）...');
+
+    const sessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     try {
       const recorder = new MicrophoneRecorder(
@@ -372,7 +247,7 @@ export function App() {
       }));
       setNotice('正在收题。第一次停止生成快答，第二次停止生成深答。');
     } catch (error) {
-      setMicLevel(0);
+      captureSessionIdRef.current = '';
       setState((current) => ({
         ...current,
         isListening: false,
@@ -381,25 +256,49 @@ export function App() {
           asr: 'error'
         }
       }));
-      setNotice(error instanceof Error ? error.message : '无法启动麦克风，请检查系统权限和输入设备。');
+      setNotice(`${error instanceof Error ? error.message : '系统音频采集启动失败。'} 可在上方手动输入问题后点生成。`);
+      return;
     }
-  }, [config, handleAudioChunk]);
 
-  const stopListening = useCallback(() => {
-    recorderRef.current?.stop();
-    recorderRef.current = undefined;
-    setMicLevel(0);
+    captureSessionIdRef.current = sessionId;
+    activeQuestionRef.current = '';
+    setQuestionTranslation('');
+    setTranslating(false);
+    lastSystemTranscriptAtRef.current = 0;
+    fastRequestRef.current = '';
+    fastAnswerIdRef.current = '';
+    deepRequestRef.current = '';
     setState((current) => ({
       ...current,
-      isListening: false,
-      capturePhase: current.capturePhase === 'collecting' ? 'idle' : current.capturePhase,
+      isListening: true,
+      capturePhase: 'collecting',
+      activeQuestion: '',
       statuses: {
         ...current.statuses,
-        asr: 'idle'
+        asr: 'listening'
       }
     }));
-    setNotice('已停止监听。');
-  }, []);
+
+    // 麦克风（候选人）：失败不阻断系统音频问题入口。
+    let micOk = false;
+    try {
+      const flushIntervalMs = latestConfig.asr.provider === 'macos-speech' ? 3000 : 1000;
+      const recorder = new MicrophoneRecorder(handleMicChunk, setNotice, undefined, setMicLevel, flushIntervalMs);
+      await recorder.start();
+      recorderRef.current = recorder;
+      micSessionIdRef.current = recorder.sessionId;
+      micOk = true;
+    } catch {
+      setMicLevel(0);
+      micSessionIdRef.current = '';
+    }
+
+    setNotice(
+      micOk
+        ? '正在收题：系统音频作为面试官问题入口。按 ⌘/Ctrl+Enter 或主按钮回答当前问题，收音会继续。'
+        : '系统音频已开始收题（麦克风未启动，候选人转写不可用）。按 ⌘/Ctrl+Enter 或主按钮回答当前问题，收音会继续。'
+    );
+  }, [config, handleMicChunk]);
 
   const runDeepAnswer = useCallback((question: string, answerId?: string) => {
     const targetAnswerId = answerId ?? `deep-${Date.now()}`;
@@ -467,84 +366,64 @@ export function App() {
     });
   }, [config.deepAnswerMode]);
 
-  const generateFastOnly = useCallback(async () => {
-    if (fastRequestRef.current || stateRef.current.statuses.fastModel === 'thinking') {
+  const captureScreenshotAnswer = useCallback(() => {
+    if (screenshotRequestRef.current || screenshotStatus === 'thinking') {
       return;
     }
 
-    const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const requestId = `screenshot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    screenshotRequestRef.current = requestId;
+    setScreenshotAnswer('');
+    setScreenshotError(undefined);
+    setScreenshotStatus('thinking');
+    setNotice('正在截取屏幕并提交视觉模型...');
+
+    void window.interviewAssistant.captureAndAnswerScreenshot(requestId).catch((error) => {
+      if (screenshotRequestRef.current !== requestId) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : '截图答题启动失败。';
+      screenshotRequestRef.current = '';
+      setScreenshotStatus('error');
+      setScreenshotError(message);
+      setNotice(message);
+    });
+  }, [screenshotStatus]);
+
+  const generateFastForQuestion = useCallback((question: string, answerId: string) => {
+    const requestId = `fast-${answerId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     fastRequestRef.current = requestId;
-    const answerId = `answer-${Date.now()}`;
-    const createdAt = Date.now();
-    const snapshotQuestion = activeQuestionRef.current.trim();
+    fastAnswerIdRef.current = answerId;
 
-    setState((current) => ({
-      ...current,
-      capturePhase: 'fastSubmitted',
-      statuses: {
-        ...current.statuses,
-        fastModel: 'thinking',
-        deepAgent: 'idle'
-      },
-      currentAnswer: {
-        id: answerId,
-        question: snapshotQuestion,
-        fastAnswer: '快答生成中...',
-        fastStatus: 'thinking',
-        deepStatus: 'idle',
-        createdAt,
-        updatedAt: createdAt
+    setState((current) => {
+      if (current.currentAnswer?.id !== answerId) {
+        return current;
       }
-    }));
-    setDeepTrace(['第一次停止已触发，继续收完整问题后第二次停止生成深答。']);
-    setNotice('第一次停止：正在整理最后一段转写并生成快答，麦克风继续收完整问题。');
 
-    await flushAndWaitForRecorder();
-    const question = activeQuestionRef.current.trim();
-
-    if (!question) {
-      if (fastRequestRef.current === requestId) {
-        fastRequestRef.current = '';
-      }
-      setState((current) => ({
+      return {
         ...current,
+        currentAnswer: {
+          ...current.currentAnswer,
+          fastAnswer: '',
+          fastStatus: 'thinking',
+          updatedAt: Date.now()
+        },
         statuses: {
           ...current.statuses,
-          fastModel: 'idle'
-        },
-        currentAnswer:
-          current.currentAnswer?.id === answerId
-            ? {
-                ...current.currentAnswer,
-                fastAnswer: '',
-                fastStatus: 'idle',
-                updatedAt: Date.now()
-              }
-            : current.currentAnswer
-      }));
-      setNotice('还没有收集到问题内容，可以继续听或手动输入。');
-      return;
-    }
+          fastModel: 'thinking'
+        }
+      };
+    });
 
-    setState((current) =>
-      current.currentAnswer?.id === answerId
-        ? {
-            ...current,
-            currentAnswer: {
-              ...current.currentAnswer,
-              question,
-              updatedAt: Date.now()
-            }
-          }
-        : current
-    );
-
-    try {
-      const fastAnswer = await window.interviewAssistant.generateFastAnswer(question);
+    void window.interviewAssistant.generateFastAnswerStream(requestId, question).catch((error) => {
       if (fastRequestRef.current !== requestId) {
         return;
       }
 
+      const message = error instanceof Error ? error.message : '快答流式启动失败。';
+      fastRequestRef.current = '';
+      fastAnswerIdRef.current = '';
       setState((current) => {
         if (current.currentAnswer?.id !== answerId) {
           return current;
@@ -554,113 +433,91 @@ export function App() {
           ...current,
           currentAnswer: {
             ...current.currentAnswer,
-            fastAnswer,
-            fastStatus: 'ready',
+            fastAnswer: '',
+            fastStatus: 'error',
+            error: message,
             updatedAt: Date.now()
           },
           statuses: {
             ...current.statuses,
-            fastModel: 'ready'
+            fastModel: 'error'
           }
         };
       });
-      if (fastRequestRef.current === requestId) {
-        fastRequestRef.current = '';
-      }
-      setNotice('快答已生成。面试官问完后再点第二次停止生成深答。');
-    } catch (error) {
-      if (fastRequestRef.current !== requestId) {
-        return;
-      }
-
-      const message = error instanceof Error ? error.message : '快答生成失败。';
-      const failedAnswer: AnswerResult = {
-        id: `error-${Date.now()}`,
-        question,
-        fastAnswer: '',
-        fastStatus: 'error',
-        deepStatus: 'idle',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        error: message
-      };
-
-      setState((current) => ({
-        ...current,
-        currentAnswer: current.currentAnswer?.id === answerId ? failedAnswer : current.currentAnswer,
-        statuses: {
-          ...current.statuses,
-          fastModel: 'error',
-          deepAgent: 'idle'
-        }
-      }));
-      if (fastRequestRef.current === requestId) {
-        fastRequestRef.current = '';
-      }
       setNotice(message);
-    }
+    });
   }, []);
 
-  const generateDeepFromFullQuestion = useCallback(async () => {
-    if (stateRef.current.statuses.deepAgent === 'thinking') {
-      return;
-    }
-
-    setNotice('第二次停止：正在补齐最后一段转写...');
-    setState((current) => ({
-      ...current,
-      isListening: false,
-      statuses: {
-        ...current.statuses,
-        asr: 'thinking'
-      }
-    }));
-
-    const sequence = recorderRef.current?.flush();
-    recorderRef.current?.stop();
-    recorderRef.current = undefined;
-    setMicLevel(0);
-    await waitForSequenceFlushed(sequence);
-    await waitForPendingTranscriptions();
+  const answerCurrentQuestion = useCallback(() => {
     const question = activeQuestionRef.current.trim();
-
     if (!question) {
-      captureSessionIdRef.current = '';
-      setState((current) => ({
-        ...current,
-        capturePhase: 'idle',
-        statuses: {
-          ...current.statuses,
-          asr: 'idle',
-          deepAgent: 'idle'
-        }
-      }));
-      setNotice('还没有完整问题内容，无法生成深答。');
+      setNotice('还没收到面试官问题，继续听…');
       return;
     }
 
-    captureSessionIdRef.current = '';
+    // 清空当前问题缓冲，让后续系统音频自然累积成下一题。
+    activeQuestionRef.current = '';
+    clearSilenceTimer();
+    setQuestionTranslation('');
+    const answerId = `answer-${Date.now()}`;
+    const createdAt = Date.now();
+
     setState((current) => ({
       ...current,
-      isListening: false,
-      capturePhase: 'idle',
-      currentAnswer: current.currentAnswer
-        ? {
-            ...current.currentAnswer,
-            question,
-            deepStatus: 'thinking',
-            updatedAt: Date.now()
-          }
-        : current.currentAnswer,
+      activeQuestion: '',
+      currentAnswer: {
+        id: answerId,
+        question,
+        fastAnswer: '快答生成中…',
+        fastStatus: 'thinking',
+        deepAnswer: '',
+        deepStatus: 'thinking',
+        createdAt,
+        updatedAt: createdAt
+      },
       statuses: {
         ...current.statuses,
-        asr: 'idle',
+        fastModel: 'thinking',
         deepAgent: 'thinking'
       }
     }));
-    setNotice('第二次停止：完整问题已提交深答。');
-    void runDeepAnswer(question, stateRef.current.currentAnswer?.id);
-  }, [runDeepAnswer]);
+    setNotice('正在回答上一题，同时继续收音…');
+    void generateFastForQuestion(question, answerId);
+    void runDeepAnswer(question, answerId);
+  }, [clearSilenceTimer, generateFastForQuestion, runDeepAnswer]);
+
+  // 自动答题只观察系统音频转写静默，不介入 ASR 和问题拼接逻辑。
+  const scheduleSilenceTrigger = useCallback(() => {
+    clearSilenceTimer();
+
+    if (!autoAnswerRef.current) {
+      return;
+    }
+
+    if (stateRef.current.capturePhase !== 'collecting' || !activeQuestionRef.current.trim()) {
+      return;
+    }
+
+    const lastTranscriptAt = lastSystemTranscriptAtRef.current || Date.now();
+    const delay = Math.max(0, AUTO_ANSWER_SILENCE_MS - (Date.now() - lastTranscriptAt));
+
+    silenceTimerRef.current = window.setTimeout(() => {
+      silenceTimerRef.current = undefined;
+      if (autoAnswerRef.current && stateRef.current.capturePhase === 'collecting' && activeQuestionRef.current.trim()) {
+        answerCurrentQuestion();
+      }
+    }, delay);
+  }, [answerCurrentQuestion, clearSilenceTimer]);
+
+  useEffect(() => {
+    scheduleSilenceTriggerRef.current = scheduleSilenceTrigger;
+  }, [scheduleSilenceTrigger]);
+
+  useEffect(() => {
+    return () => {
+      clearSilenceTimer();
+    };
+  }, [clearSilenceTimer]);
 
   const handleCaptureButton = useCallback(() => {
     const latest = stateRef.current;
@@ -669,30 +526,185 @@ export function App() {
       return;
     }
 
-    if (latest.capturePhase === 'collecting') {
-      void generateFastOnly();
-      return;
-    }
-
-    if (latest.capturePhase === 'fastSubmitted') {
-      void generateDeepFromFullQuestion();
-    }
-  }, [generateDeepFromFullQuestion, generateFastOnly, startListening]);
+    answerCurrentQuestion();
+  }, [answerCurrentQuestion, startListening]);
 
   const confirmQuestion = useCallback(() => {
-    if (state.capturePhase === 'fastSubmitted') {
-      void generateDeepFromFullQuestion();
+    answerCurrentQuestion();
+  }, [answerCurrentQuestion]);
+
+  const translateCurrentQuestion = useCallback(async () => {
+    const text = activeQuestionRef.current.trim();
+
+    if (!text) {
+      setNotice('还没有可翻译的问题内容，可以继续听或在上方手动输入。');
       return;
     }
 
-    void generateFastOnly();
-  }, [generateDeepFromFullQuestion, generateFastOnly, state.capturePhase]);
+    setTranslating(true);
+    setQuestionTranslation('');
+
+    try {
+      const translation = await window.interviewAssistant.translateQuestion(text);
+      setQuestionTranslation(translation);
+      setNotice('问题已译为中文。');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '问题翻译失败。');
+    } finally {
+      setTranslating(false);
+    }
+  }, []);
 
   useEffect(() => {
     return window.interviewAssistant.onConfirmHotkey(() => {
       confirmQuestion();
     });
   }, [confirmQuestion]);
+
+  useEffect(() => {
+    return window.interviewAssistant.onScreenshotHotkey(() => {
+      captureScreenshotAnswer();
+    });
+  }, [captureScreenshotAnswer]);
+
+  // 系统音频转写（面试官）：merge 进 activeQuestion 驱动收题状态机，并作为 interviewer 条目显示。
+  useEffect(() => {
+    return window.interviewAssistant.onSystemAudioTranscript((transcript) => {
+      if (transcript.sessionId !== captureSessionIdRef.current) {
+        return;
+      }
+      if (stateRef.current.capturePhase === 'idle') {
+        return;
+      }
+
+      const text = normalizeQuestion(transcript.text);
+      if (!text) {
+        return;
+      }
+
+      const merged = mergeQuestionText(activeQuestionRef.current, text);
+      activeQuestionRef.current = merged;
+      lastSystemTranscriptAtRef.current = Date.now();
+      setQuestionTranslation('');
+
+      const segment: TranscriptSegment = {
+        id: `sys-${transcript.sessionId}-${transcript.sequence}`,
+        text,
+        timestamp: transcript.timestamp,
+        confidence: transcript.confidence,
+        isCandidateQuestion: isLikelyQuestion(text),
+        sequence: transcript.sequence,
+        speaker: 'interviewer'
+      };
+
+      setState((current) => {
+        if (current.capturePhase === 'idle') {
+          return current;
+        }
+
+        return {
+          ...current,
+          activeQuestion: merged,
+          transcript: [segment, ...current.transcript].slice(0, 14),
+          statuses: {
+            ...current.statuses,
+            asr: current.isListening ? 'listening' : current.statuses.asr
+          }
+        };
+      });
+      scheduleSilenceTriggerRef.current?.();
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.interviewAssistant.onSystemAudioStatus((status) => {
+      if (status.sessionId !== captureSessionIdRef.current) {
+        return;
+      }
+      if (status.message) {
+        setNotice(status.message);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.interviewAssistant.onFastAnswerStream((chunk) => {
+      if (chunk.requestId !== fastRequestRef.current) {
+        return;
+      }
+
+      const answerId = fastAnswerIdRef.current;
+      const delta = chunk.delta;
+      if (delta) {
+        setState((current) => {
+          if (current.currentAnswer?.id !== answerId) {
+            return current;
+          }
+
+          return {
+            ...current,
+            currentAnswer: {
+              ...current.currentAnswer,
+              fastAnswer: `${current.currentAnswer.fastAnswer ?? ''}${delta}`,
+              fastStatus: 'thinking',
+              updatedAt: Date.now()
+            },
+            statuses: {
+              ...current.statuses,
+              fastModel: 'thinking'
+            }
+          };
+        });
+      }
+
+      if (!chunk.done) {
+        return;
+      }
+
+      fastRequestRef.current = '';
+      fastAnswerIdRef.current = '';
+
+      if (chunk.error) {
+        setState((current) => ({
+          ...current,
+          currentAnswer:
+            current.currentAnswer?.id === answerId
+              ? {
+                  ...current.currentAnswer,
+                  fastStatus: 'error',
+                  error: chunk.error,
+                  updatedAt: Date.now()
+                }
+              : current.currentAnswer,
+          statuses: {
+            ...current.statuses,
+            fastModel: 'error'
+          }
+        }));
+        setNotice(chunk.error);
+        return;
+      }
+
+      const finalText = chunk.text;
+      setState((current) => ({
+        ...current,
+        currentAnswer:
+          current.currentAnswer?.id === answerId
+            ? {
+                ...current.currentAnswer,
+                fastAnswer: finalText ?? current.currentAnswer.fastAnswer,
+                fastStatus: 'ready',
+                updatedAt: Date.now()
+              }
+            : current.currentAnswer,
+        statuses: {
+          ...current.statuses,
+          fastModel: 'ready'
+        }
+      }));
+      setNotice('快答已生成。');
+    });
+  }, []);
 
   useEffect(() => {
     return window.interviewAssistant.onDeepAnswerStream((chunk) => {
@@ -766,6 +778,35 @@ export function App() {
     });
   }, []);
 
+  useEffect(() => {
+    return window.interviewAssistant.onScreenshotAnswerStream((chunk) => {
+      if (chunk.requestId !== screenshotRequestRef.current) {
+        return;
+      }
+
+      if (chunk.delta) {
+        setScreenshotAnswer((current) => `${current}${chunk.delta}`);
+        setScreenshotStatus('thinking');
+      }
+
+      if (!chunk.done) {
+        return;
+      }
+
+      screenshotRequestRef.current = '';
+
+      if (chunk.error) {
+        setScreenshotStatus('error');
+        setScreenshotError(chunk.error);
+        setNotice(chunk.error);
+        return;
+      }
+
+      setScreenshotStatus('ready');
+      setNotice('截图答题已完成。');
+    });
+  }, []);
+
   const saveSettings = async () => {
     const currentConfig = await window.interviewAssistant.getConfig().catch(() => config);
     const mergedConfig: AppConfig = {
@@ -775,6 +816,10 @@ export function App() {
         openai: {
           ...config.asr.openai,
           apiKey: config.asr.openai.apiKey || currentConfig.asr.openai.apiKey
+        },
+        openaiRealtime: {
+          ...config.asr.openaiRealtime,
+          apiKey: config.asr.openaiRealtime.apiKey || currentConfig.asr.openaiRealtime.apiKey
         },
         volcengine: {
           ...config.asr.volcengine,
@@ -799,24 +844,50 @@ export function App() {
       deepModel: {
         ...config.deepModel,
         apiKey: config.deepModel.apiKey || currentConfig.deepModel.apiKey
+      },
+      screenshotModel: {
+        ...config.screenshotModel,
+        apiKey: config.screenshotModel.apiKey || currentConfig.screenshotModel.apiKey
+      },
+      knowledgeBase: {
+        ...config.knowledgeBase,
+        embedding: {
+          ...config.knowledgeBase.embedding,
+          apiKey: config.knowledgeBase.embedding.apiKey || currentConfig.knowledgeBase.embedding.apiKey
+        }
       }
     };
     const saved = await window.interviewAssistant.saveConfig(mergedConfig);
     setConfig(saved);
     setShowSettings(false);
-    setNotice(`设置已保存，确认热键：${saved.confirmHotkey}`);
+    setNotice(`设置已保存，确认热键：${saved.confirmHotkey}；笔试截图：${saved.screenshotHotkey}`);
   };
 
-  const captureButtonLabel =
-    !state.isListening ? '开始收题' : state.capturePhase === 'collecting' ? '第一次停止' : '第二次停止';
+  const captureButtonLabel = !state.isListening ? '开始收题' : '回答当前问题 (⌘⏎)';
   const captureButtonTitle =
     !state.isListening
-      ? '启动麦克风并开始累积问题'
-      : state.capturePhase === 'collecting'
-        ? '提交当前问题片段给快答，麦克风继续收完整问题'
-        : '停止麦克风并提交完整问题给深答';
-  const captureButtonIcon = !state.isListening ? <Mic size={16} /> : state.capturePhase === 'collecting' ? <Flag size={16} /> : <MicOff size={16} />;
-  const captureButtonClass = !state.isListening ? 'primary-button' : state.capturePhase === 'collecting' ? 'primary-button' : 'danger-button';
+      ? '启动系统音频采集并开始累积面试官问题'
+      : '提交当前累计问题给快答和深答，系统音频继续收下一题';
+  const captureButtonIcon = !state.isListening ? <Mic size={16} /> : <Send size={16} />;
+  const captureButtonClass = 'primary-button';
+  const toggleAutoAnswer = () => {
+    const next = { ...config, autoAnswer: !config.autoAnswer };
+    setConfig(next);
+    autoAnswerRef.current = next.autoAnswer;
+    if (!next.autoAnswer) {
+      clearSilenceTimer();
+    } else {
+      scheduleSilenceTriggerRef.current?.();
+    }
+    void window.interviewAssistant.saveConfig(next);
+    setNotice(next.autoAnswer ? '自动答题已开启：停顿后自动回答当前问题并继续收音。' : '自动答题已关闭。');
+  };
+  const changeAnswerLanguage = (answerLanguage: AnswerLanguage) => {
+    const next = { ...config, answerLanguage };
+    setConfig(next);
+    void window.interviewAssistant.saveConfig(next);
+    setNotice(`答题语言已切换为：${answerLanguageLabel(answerLanguage)}`);
+  };
 
   return (
     <main className="app-shell">
@@ -833,6 +904,16 @@ export function App() {
           </div>
 
           <div className="window-actions">
+            <label className="language-select" title="答题语言">
+              <Languages size={15} />
+              <select value={config.answerLanguage} onChange={(event) => changeAnswerLanguage(event.target.value as AnswerLanguage)}>
+                <option value="auto">跟随问题</option>
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+              </select>
+            </label>
             <button
               className={captureButtonClass}
               type="button"
@@ -841,6 +922,25 @@ export function App() {
             >
               {captureButtonIcon}
               {captureButtonLabel}
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={captureScreenshotAnswer}
+              disabled={screenshotStatus === 'thinking'}
+              title={`截取当前屏幕并解题，热键 ${config.screenshotHotkey}`}
+            >
+              <Camera size={16} />
+              笔试截图
+            </button>
+            <button
+              className={['icon-button', 'auto-answer-toggle', config.autoAnswer ? 'active' : ''].filter(Boolean).join(' ')}
+              type="button"
+              onClick={toggleAutoAnswer}
+              title="自动答题（语音触发）"
+            >
+              <Zap size={18} />
+              <span>自动:{config.autoAnswer ? '开' : '关'}</span>
             </button>
             <button className="icon-button" type="button" onClick={() => setShowSettings(true)} aria-label="打开设置">
               <Settings size={18} />
@@ -859,7 +959,7 @@ export function App() {
                   <Radio size={17} />
                   实时转写
                 </h2>
-                <p>麦克风环境音，约 1 秒低延迟识别</p>
+                <p>系统音频=面试官提问（问题入口），麦克风=候选人回答</p>
               </div>
               <span className="signal" title={`麦克风电平 ${Math.round(micLevel * 100)}%`}>
                 {[0.18, 0.38, 0.62, 0.84].map((threshold) => (
@@ -875,13 +975,20 @@ export function App() {
                 onChange={(event) => {
                   const value = event.target.value;
                   activeQuestionRef.current = value;
+                  setQuestionTranslation('');
                   setState((current) => ({ ...current, activeQuestion: value }));
                 }}
               />
-              <button className="primary-button" type="button" onClick={confirmQuestion}>
-                <Send size={16} />
-                {state.capturePhase === 'fastSubmitted' ? '生成深答' : '生成快答'}
-              </button>
+              <div className="question-actions">
+                <button className="primary-button" type="button" onClick={confirmQuestion}>
+                  <Send size={16} />
+                  回答此问题
+                </button>
+                <button className="ghost-button translate-button" type="button" onClick={translateCurrentQuestion} disabled={translating}>
+                  <Languages size={15} />
+                  {translating ? '翻译中...' : '译为中文'}
+                </button>
+              </div>
             </div>
 
             <div className="candidate-box">
@@ -891,6 +998,12 @@ export function App() {
               </span>
               <strong>{state.activeQuestion || '等待开始收题'}</strong>
             </div>
+            {questionTranslation || translating ? (
+              <div className="translation-box">
+                <span>中文翻译</span>
+                <p>{translating ? '翻译中...' : questionTranslation}</p>
+              </div>
+            ) : null}
 
             <div className="transcript-list">
               {state.transcript.length === 0 ? (
@@ -900,8 +1013,20 @@ export function App() {
                 </div>
               ) : (
                 state.transcript.map((item) => (
-                  <article key={item.id} className={item.isCandidateQuestion ? 'transcript-item hot' : 'transcript-item'}>
-                    <time>{new Date(item.timestamp).toLocaleTimeString()}</time>
+                  <article
+                    key={item.id}
+                    className={[
+                      'transcript-item',
+                      item.speaker === 'candidate' ? 'candidate' : 'interviewer',
+                      item.isCandidateQuestion ? 'hot' : ''
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <div className="transcript-meta">
+                      <span className="speaker-tag">{item.speaker === 'candidate' ? '候选人' : '面试官'}</span>
+                      <time>{new Date(item.timestamp).toLocaleTimeString()}</time>
+                    </div>
                     <p>{item.text}</p>
                     <small>置信度 {Math.round(item.confidence * 100)}%</small>
                   </article>
@@ -967,6 +1092,31 @@ export function App() {
                 )}
               </div>
             </article>
+
+            <article className="panel screenshot-panel">
+              <header className="panel-header">
+                <div>
+                  <h2>
+                    <Camera size={17} />
+                    笔试截图
+                  </h2>
+                  <p>{config.screenshotMode === 'acm' ? 'ACM 算法题，输出可提交代码' : '通用题目识别与解答'}</p>
+                </div>
+                <StatusPill label="截图" status={screenshotStatus} />
+              </header>
+
+              <div className="answer-content screenshot-answer">
+                {screenshotError ? (
+                  <p className="error-text">{screenshotError}</p>
+                ) : screenshotAnswer ? (
+                  <pre>{screenshotAnswer}</pre>
+                ) : screenshotStatus === 'thinking' ? (
+                  <p className="placeholder">正在识别截图并解题...</p>
+                ) : (
+                  <p className="placeholder">点击「笔试截图」或按热键，对当前屏幕题目作答</p>
+                )}
+              </div>
+            </article>
           </section>
         </div>
 
@@ -989,6 +1139,18 @@ export function App() {
 }
 
 function validateAsrConfig(config: AppConfig): string | undefined {
+  if (config.asr.provider === 'macos-speech') {
+    return undefined;
+  }
+
+  if (config.asr.provider === 'openai-realtime') {
+    if (!config.asr.openaiRealtime.apiKey.trim()) {
+      return '请先在设置里填写 OpenAI Realtime 的 apiKey。';
+    }
+
+    return undefined;
+  }
+
   if (config.asr.provider === 'volcengine-sauc-stream') {
     const volcengineSauc = config.asr.volcengineSauc;
     if (!volcengineSauc.endpoint.trim()) {
@@ -1078,4 +1240,20 @@ function normalizeModelApiKey(apiKey: string, baseURL: string): string {
   }
 
   return `sk-${trimmed}`;
+}
+
+function answerLanguageLabel(lang: AnswerLanguage): string {
+  switch (lang) {
+    case 'zh':
+      return '中文';
+    case 'en':
+      return 'English';
+    case 'ja':
+      return '日本語';
+    case 'ko':
+      return '한국어';
+    case 'auto':
+    default:
+      return '跟随问题';
+  }
 }

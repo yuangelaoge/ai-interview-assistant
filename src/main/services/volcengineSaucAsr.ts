@@ -54,9 +54,11 @@ export async function transcribeWithVolcengineSauc(
     socket.send(buildFullClientRequest(config));
     await waitForFirstResponse(collector, 2_000);
 
-    for (const chunk of splitBuffer(pcm, 3200)) {
+    // 整段已缓冲完毕，无需按实时节流逐片发送。用更大分片 + 仅让出事件循环（不再 sleep 20ms/片），
+    // 把原先约 760ms 的人为 pacing 砍掉；只 yield 以便 message 收集器处理服务端回包。
+    for (const chunk of splitBuffer(pcm, 19200)) {
       socket.send(buildAudioOnlyRequest(chunk, false));
-      await wait(20);
+      await wait(0);
     }
 
     socket.send(buildAudioOnlyRequest(Buffer.alloc(0), true));
@@ -132,12 +134,11 @@ function buildFullClientRequest(config: VolcengineSaucConfig): Buffer {
           uid: 'interview-assistant'
         },
         audio: {
-          format: 'raw',
+          format: 'pcm',
           codec: 'raw',
           rate: 16000,
           bits: 16,
-          channel: 1,
-          language: 'zh-CN'
+          channel: 1
         },
         request: {
           model_name: config.modelName.trim() || 'bigmodel',

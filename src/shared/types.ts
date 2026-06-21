@@ -1,7 +1,10 @@
 export type ServiceStatus = 'idle' | 'listening' | 'thinking' | 'ready' | 'error';
-export type CapturePhase = 'idle' | 'collecting' | 'fastSubmitted';
+export type CapturePhase = 'idle' | 'collecting';
+export type Speaker = 'interviewer' | 'candidate';
 export type FastAnswerMode = 'zero-context' | 'context';
 export type DeepAnswerMode = 'context' | 'codebase';
+export type ScreenshotMode = 'general' | 'acm';
+export type AnswerLanguage = 'auto' | 'zh' | 'en' | 'ja' | 'ko';
 
 export interface ModelEndpointConfig {
   baseURL: string;
@@ -9,7 +12,19 @@ export interface ModelEndpointConfig {
   model: string;
 }
 
-export type AsrProvider = 'openai-compatible' | 'volcengine-auc-flash' | 'volcengine-sauc-stream';
+export interface KnowledgeBaseConfig {
+  enabled: boolean;
+  dirPath: string;
+  embedding: ModelEndpointConfig;
+  topK: number;
+}
+
+export type AsrProvider =
+  | 'openai-compatible'
+  | 'volcengine-auc-flash'
+  | 'volcengine-sauc-stream'
+  | 'macos-speech'
+  | 'openai-realtime';
 
 export interface VolcengineAsrConfig {
   endpoint: string;
@@ -34,7 +49,9 @@ export interface VolcengineSaucConfig {
 
 export interface AsrConfig {
   provider: AsrProvider;
+  language: string;
   openai: ModelEndpointConfig;
+  openaiRealtime: ModelEndpointConfig;
   volcengine: VolcengineAsrConfig;
   volcengineSauc: VolcengineSaucConfig;
 }
@@ -44,12 +61,19 @@ export interface AppConfig {
   audioInputDeviceId: string;
   fastModel: ModelEndpointConfig;
   deepModel: ModelEndpointConfig;
+  screenshotModel: ModelEndpointConfig;
+  knowledgeBase: KnowledgeBaseConfig;
   fastAnswerMode: FastAnswerMode;
   deepAnswerMode: DeepAnswerMode;
+  screenshotMode: ScreenshotMode;
+  answerLanguage: AnswerLanguage;
   shallowDocsPath: string;
   deepContextPath: string;
   codeWorkspacePath: string;
   confirmHotkey: string;
+  autoAnswer: boolean;
+  screenshotHotkey: string;
+  screenshotTripleClick: boolean;
 }
 
 export interface TranscriptSegment {
@@ -59,6 +83,7 @@ export interface TranscriptSegment {
   confidence: number;
   isCandidateQuestion: boolean;
   sequence?: number;
+  speaker?: Speaker;
 }
 
 export interface AsrResult {
@@ -97,6 +122,21 @@ export interface AudioChunkPayload {
   data: ArrayBuffer;
   sequence?: number;
   captureSessionId?: string;
+  speaker?: Speaker;
+}
+
+export interface SystemAudioTranscript {
+  sessionId: string;
+  sequence: number;
+  text: string;
+  timestamp: number;
+  confidence: number;
+}
+
+export interface SystemAudioStatus {
+  sessionId: string;
+  status: ServiceStatus;
+  message?: string;
 }
 
 export interface DeepAgentTraceStep {
@@ -118,15 +158,40 @@ export interface DeepAnswerStreamChunk {
   done?: boolean;
 }
 
+export interface FastAnswerStreamChunk {
+  requestId: string;
+  delta?: string;
+  done?: boolean;
+  error?: string;
+  text?: string;
+}
+
+export interface ScreenshotAnswerStreamChunk {
+  requestId: string;
+  delta?: string;
+  done?: boolean;
+  error?: string;
+}
+
 export interface IpcChannels {
   getConfig: () => Promise<AppConfig>;
   saveConfig: (config: AppConfig) => Promise<AppConfig>;
   transcribeAudio: (payload: AudioChunkPayload) => Promise<AsrResult>;
   confirmQuestion: (question: string) => Promise<AnswerResult>;
   generateFastAnswer: (question: string) => Promise<string>;
+  generateFastAnswerStream: (requestId: string, question: string) => Promise<void>;
+  onFastAnswerStream: (callback: (chunk: FastAnswerStreamChunk) => void) => () => void;
+  translateQuestion: (text: string) => Promise<string>;
   generateDeepAnswer: (question: string) => Promise<DeepAnswerResult>;
   generateDeepAnswerStream: (requestId: string, question: string) => Promise<void>;
   onDeepAnswerStream: (callback: (chunk: DeepAnswerStreamChunk) => void) => () => void;
+  captureAndAnswerScreenshot: (requestId: string) => Promise<void>;
+  onScreenshotAnswerStream: (callback: (chunk: ScreenshotAnswerStreamChunk) => void) => () => void;
+  onScreenshotHotkey: (callback: () => void) => () => void;
+  startSystemAudio: (sessionId: string) => Promise<{ ok: boolean; message?: string }>;
+  stopSystemAudio: () => Promise<void>;
+  onSystemAudioTranscript: (callback: (transcript: SystemAudioTranscript) => void) => () => void;
+  onSystemAudioStatus: (callback: (status: SystemAudioStatus) => void) => () => void;
   selectDirectory: () => Promise<string | undefined>;
   selectFiles: () => Promise<string | undefined>;
   registerHotkey: (accelerator: string) => Promise<boolean>;

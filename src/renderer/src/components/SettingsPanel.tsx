@@ -28,6 +28,34 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
       return;
     }
 
+    if (key === 'openaiRealtime') {
+      onChange({
+        ...config,
+        asr: {
+          ...config.asr,
+          openaiRealtime: {
+            ...config.asr.openaiRealtime,
+            ...patch
+          }
+        }
+      });
+      return;
+    }
+
+    if (key === 'knowledgeBaseEmbedding') {
+      onChange({
+        ...config,
+        knowledgeBase: {
+          ...config.knowledgeBase,
+          embedding: {
+            ...config.knowledgeBase.embedding,
+            ...patch
+          }
+        }
+      });
+      return;
+    }
+
     onChange({
       ...config,
       [key]: {
@@ -37,13 +65,24 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
     });
   };
 
-  const choosePath = async (field: 'shallowDocsPath' | 'deepContextPath' | 'codeWorkspacePath') => {
+  const choosePath = async (field: 'shallowDocsPath' | 'deepContextPath' | 'codeWorkspacePath' | 'knowledgeBaseDirPath') => {
     const selectedPath =
       field === 'shallowDocsPath' || field === 'deepContextPath'
         ? await window.interviewAssistant.selectFiles()
         : await window.interviewAssistant.selectDirectory();
 
     if (selectedPath) {
+      if (field === 'knowledgeBaseDirPath') {
+        onChange({
+          ...config,
+          knowledgeBase: {
+            ...config.knowledgeBase,
+            dirPath: selectedPath
+          }
+        });
+        return;
+      }
+
       onChange({
         ...config,
         [field]: selectedPath
@@ -132,6 +171,8 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             >
               <option value="volcengine-sauc-stream">火山流式语音识别</option>
               <option value="volcengine-auc-flash">LAS 豆包语音 ASR</option>
+              <option value="macos-speech">macOS 系统语音识别</option>
+              <option value="openai-realtime">OpenAI 实时转写(gpt-4o-transcribe)</option>
               <option value="openai-compatible">OpenAI 兼容 Whisper</option>
             </select>
           </label>
@@ -168,13 +209,28 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
                 })
               }
             />
+          ) : config.asr.provider === 'macos-speech' ? (
+            <MacosSpeechFields />
+          ) : config.asr.provider === 'openai-realtime' ? (
+            <>
+              <EndpointFields
+                title="OpenAI 实时转写(gpt-4o-transcribe)"
+                endpoint={config.asr.openaiRealtime}
+                onChange={(patch) => updateEndpoint('openaiRealtime', patch)}
+                embedded
+              />
+              <AsrLanguageField config={config} onChange={onChange} />
+            </>
           ) : (
-            <EndpointFields
-              title="OpenAI 兼容 ASR"
-              endpoint={config.asr.openai}
-              onChange={(patch) => updateEndpoint('asr', patch)}
-              embedded
-            />
+            <>
+              <EndpointFields
+                title="OpenAI 兼容 ASR"
+                endpoint={config.asr.openai}
+                onChange={(patch) => updateEndpoint('asr', patch)}
+                embedded
+              />
+              <AsrLanguageField config={config} onChange={onChange} />
+            </>
           )}
         </section>
 
@@ -190,6 +246,31 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             }
           }}
         />
+
+        <section className="endpoint-section">
+          <h3>
+            <KeyRound size={15} />
+            答题语言
+          </h3>
+          <label className="field">
+            <span>语言</span>
+            <select
+              value={config.answerLanguage}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  answerLanguage: event.target.value as AppConfig['answerLanguage']
+                })
+              }
+            >
+              <option value="auto">跟随问题</option>
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+            </select>
+          </label>
+        </section>
 
         <section className="endpoint-section">
           <h3>
@@ -214,7 +295,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
 
           {config.fastAnswerMode === 'context' ? (
             <label className="field">
-              <span>快答上下文文件（md/txt）</span>
+              <span>快答上下文文件（md/txt/pdf）</span>
               <div className="input-with-action">
                 <input
                   value={config.shallowDocsPath}
@@ -239,6 +320,78 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
         <section className="endpoint-section">
           <h3>
             <KeyRound size={15} />
+            知识库 (RAG)
+          </h3>
+          <label className="field checkbox-field">
+            <span>启用知识库检索</span>
+            <input
+              checked={config.knowledgeBase.enabled}
+              type="checkbox"
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  knowledgeBase: {
+                    ...config.knowledgeBase,
+                    enabled: event.target.checked
+                  }
+                })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>知识库目录</span>
+            <div className="input-with-action">
+              <input
+                value={config.knowledgeBase.dirPath}
+                onChange={(event) =>
+                  onChange({
+                    ...config,
+                    knowledgeBase: {
+                      ...config.knowledgeBase,
+                      dirPath: event.target.value
+                    }
+                  })
+                }
+              />
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => choosePath('knowledgeBaseDirPath')}
+                aria-label="选择知识库目录"
+              >
+                <FolderOpen size={16} />
+              </button>
+            </div>
+          </label>
+          <EndpointFields
+            title="Embedding API"
+            endpoint={config.knowledgeBase.embedding}
+            onChange={(patch) => updateEndpoint('knowledgeBaseEmbedding', patch)}
+            embedded
+          />
+          <label className="field">
+            <span>topK</span>
+            <input
+              value={config.knowledgeBase.topK}
+              type="number"
+              min={1}
+              max={20}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  knowledgeBase: {
+                    ...config.knowledgeBase,
+                    topK: Number(event.target.value)
+                  }
+                })
+              }
+            />
+          </label>
+        </section>
+
+        <section className="endpoint-section">
+          <h3>
+            <KeyRound size={15} />
             深答模式
           </h3>
           <label className="field">
@@ -259,7 +412,7 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
 
           {config.deepAnswerMode === 'context' ? (
             <label className="field">
-              <span>深答长上下文文件（md/txt）</span>
+              <span>深答长上下文文件（md/txt/pdf）</span>
               <div className="input-with-action">
                 <input
                   value={config.deepContextPath}
@@ -286,10 +439,62 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
           )}
         </section>
 
+        <EndpointFields
+          title="笔试截图 / 视觉模型"
+          endpoint={config.screenshotModel}
+          onChange={(patch) => updateEndpoint('screenshotModel', patch)}
+        />
+
+        <section className="endpoint-section">
+          <h3>
+            <KeyRound size={15} />
+            笔试截图模式
+          </h3>
+          <label className="field">
+            <span>模式</span>
+            <select
+              value={config.screenshotMode}
+              onChange={(event) =>
+                onChange({
+                  ...config,
+                  screenshotMode: event.target.value as AppConfig['screenshotMode']
+                })
+              }
+            >
+              <option value="general">通用解题</option>
+              <option value="acm">ACM 算法</option>
+            </select>
+          </label>
+
+          <label className="field">
+            <span>笔试截图热键</span>
+            <input value={config.screenshotHotkey} onChange={(event) => onChange({ ...config, screenshotHotkey: event.target.value })} />
+          </label>
+
+          <label className="field checkbox-field">
+            <span>全局三击触发截图（需辅助功能权限）</span>
+            <input
+              checked={config.screenshotTripleClick}
+              type="checkbox"
+              onChange={(event) => onChange({ ...config, screenshotTripleClick: event.target.checked })}
+            />
+          </label>
+        </section>
+
         <label className="field">
           <span>确认热键</span>
           <input value={config.confirmHotkey} onChange={(event) => onChange({ ...config, confirmHotkey: event.target.value })} />
         </label>
+
+        <label className="field checkbox-field">
+          <span>自动答题（语音触发）</span>
+          <input
+            checked={config.autoAnswer}
+            type="checkbox"
+            onChange={(event) => onChange({ ...config, autoAnswer: event.target.checked })}
+          />
+        </label>
+        <p className="field-help">开启后，面试官停顿约 1.6 秒自动出快答，约 3.5 秒自动出深答。</p>
       </div>
 
       <footer className="settings-footer">
@@ -299,6 +504,47 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
         </button>
       </footer>
     </aside>
+  );
+}
+
+function MacosSpeechFields() {
+  return (
+    <p className="field-help">
+      使用 macOS Speech framework 调用系统语音识别，不需要 API Key。首次使用会触发系统语音识别权限；可通过
+      AI_INTERVIEW_MACOS_SPEECH_LOCALE 和 AI_INTERVIEW_MACOS_SPEECH_ON_DEVICE 调整语言和本机识别偏好。
+    </p>
+  );
+}
+
+function AsrLanguageField({
+  config,
+  onChange
+}: {
+  config: AppConfig;
+  onChange: (config: AppConfig) => void;
+}) {
+  return (
+    <label className="field">
+      <span>识别语言</span>
+      <select
+        value={config.asr.language}
+        onChange={(event) =>
+          onChange({
+            ...config,
+            asr: {
+              ...config.asr,
+              language: event.target.value
+            }
+          })
+        }
+      >
+        <option value="">自动</option>
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+      </select>
+    </label>
   );
 }
 
