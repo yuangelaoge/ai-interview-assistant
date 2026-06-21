@@ -58,6 +58,7 @@ export interface AsrConfig {
 
 export interface AppConfig {
   asr: AsrConfig;
+  audioInputDeviceId: string;
   fastModel: ModelEndpointConfig;
   deepModel: ModelEndpointConfig;
   screenshotModel: ModelEndpointConfig;

@@ -1,4 +1,5 @@
-import { FolderOpen, KeyRound, Save, X } from 'lucide-react';
+import { FolderOpen, KeyRound, RefreshCw, Save, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { AppConfig, ModelEndpointConfig } from '../../../shared/types';
 
 interface SettingsPanelProps {
@@ -9,10 +10,10 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPanelProps) {
-  const updateEndpoint = (
-    key: 'asr' | 'openaiRealtime' | 'fastModel' | 'deepModel' | 'screenshotModel' | 'knowledgeBaseEmbedding',
-    patch: Partial<ModelEndpointConfig>
-  ) => {
+  const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
+  const [deviceNotice, setDeviceNotice] = useState('');
+
+  const updateEndpoint = (key: 'asr' | 'fastModel' | 'deepModel', patch: Partial<ModelEndpointConfig>) => {
     if (key === 'asr') {
       onChange({
         ...config,
@@ -89,6 +90,26 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
     }
   };
 
+  const refreshAudioInputs = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setDeviceNotice('当前环境不支持枚举麦克风设备。');
+      return;
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((device) => device.kind === 'audioinput');
+      setAudioInputs(inputs);
+      setDeviceNotice(inputs.length > 0 ? `已发现 ${inputs.length} 个麦克风输入设备。` : '没有发现可用麦克风输入设备。');
+    } catch (error) {
+      setDeviceNotice(error instanceof Error ? error.message : '读取麦克风设备失败。');
+    }
+  };
+
+  useEffect(() => {
+    void refreshAudioInputs();
+  }, []);
+
   return (
     <aside className="settings-panel" aria-label="设置">
       <header className="settings-header">
@@ -107,6 +128,33 @@ export function SettingsPanel({ config, onChange, onSave, onClose }: SettingsPan
             <KeyRound size={15} />
             语音识别 API
           </h3>
+          <label className="field">
+            <span>麦克风输入设备</span>
+            <div className="input-with-action">
+              <select
+                value={config.audioInputDeviceId}
+                onChange={(event) =>
+                  onChange({
+                    ...config,
+                    audioInputDeviceId: event.target.value
+                  })
+                }
+              >
+                <option value="">系统默认麦克风</option>
+                {audioInputs.map((device, index) => (
+                  <option key={device.deviceId || index} value={device.deviceId}>
+                    {device.label || `麦克风 ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="icon-button" onClick={() => void refreshAudioInputs()} aria-label="刷新麦克风设备">
+                <RefreshCw size={16} />
+              </button>
+            </div>
+          </label>
+          <p className="field-help">
+            {deviceNotice || '如果系统默认麦克风没有声音，请选择“麦克风阵列”等实际有输入信号的设备。'}
+          </p>
           <label className="field">
             <span>provider</span>
             <select

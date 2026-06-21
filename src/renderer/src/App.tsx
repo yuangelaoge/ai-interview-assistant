@@ -216,10 +216,36 @@ export function App() {
     const sessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     try {
-      const result = await window.interviewAssistant.startSystemAudio(sessionId);
-      if (!result.ok) {
-        throw new Error(result.message ?? '系统音频采集启动失败。');
-      }
+      const recorder = new MicrophoneRecorder(
+        handleAudioChunk,
+        setNotice,
+        setNotice,
+        setMicLevel,
+        latestConfig.audioInputDeviceId
+      );
+      await recorder.start();
+      recorderRef.current = recorder;
+      captureSessionIdRef.current = recorder.sessionId;
+      activeQuestionRef.current = '';
+      segmentBufferRef.current.clear();
+      nextSequenceRef.current = 0;
+      fallbackSequenceRef.current = 0;
+      completedSequencesRef.current.clear();
+      waitForSequenceRef.current.clear();
+      fastRequestRef.current = '';
+      pendingTranscriptionsRef.current = 0;
+      waitForTranscriptionsRef.current.splice(0).forEach((resolve) => resolve());
+      setState((current) => ({
+        ...current,
+        isListening: true,
+        capturePhase: 'collecting',
+        activeQuestion: '',
+        statuses: {
+          ...current.statuses,
+          asr: 'listening'
+        }
+      }));
+      setNotice('正在收题。第一次停止生成快答，第二次停止生成深答。');
     } catch (error) {
       captureSessionIdRef.current = '';
       setState((current) => ({

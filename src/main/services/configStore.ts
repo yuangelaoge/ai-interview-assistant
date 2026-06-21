@@ -46,6 +46,7 @@ const knowledgeBaseSchema = z.object({
 
 const configSchema = z.object({
   asr: asrSchema,
+  audioInputDeviceId: z.string(),
   fastModel: endpointSchema,
   deepModel: endpointSchema,
   screenshotModel: endpointSchema,
